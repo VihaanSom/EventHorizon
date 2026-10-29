@@ -1,0 +1,64 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e0000000000000000000000000000001, type: 3}
+  m_Name: EHExperienceSettings_Default
+  m_EditorClassIdentifier:
+  phases:
+  - durationSeconds: 45
+    blackHoleScale: 1
+    lensingStrength: 0.35
+    diskEmission: 0.55
+    starBrightness: 1
+    dustDensity: 0.25
+    streakAmount: 0
+    environmentMotion: 0.15
+    audioIntensity: 0.2
+  - durationSeconds: 75
+    blackHoleScale: 1.6
+    lensingStrength: 0.6
+    diskEmission: 1
+    starBrightness: 1
+    dustDensity: 0.45
+    streakAmount: 0.1
+    environmentMotion: 0.35
+    audioIntensity: 0.45
+  - durationSeconds: 60
+    blackHoleScale: 2.6
+    lensingStrength: 1
+    diskEmission: 1.25
+    starBrightness: 0.9
+    dustDensity: 1
+    streakAmount: 0.7
+    environmentMotion: 1
+    audioIntensity: 0.8
+  - durationSeconds: 60
+    blackHoleScale: 4.2
+    lensingStrength: 1.35
+    diskEmission: 0.9
+    starBrightness: 0.7
+    dustDensity: 0.8
+    streakAmount: 1
+    environmentMotion: 0.8
+    audioIntensity: 1
+  - durationSeconds: 60
+    blackHoleScale: 6.5
+    lensingStrength: 1.7
+    diskEmission: 0.45
+    starBrightness: 0.4
+    dustDensity: 0.5
+    streakAmount: 0.55
+    environmentMotion: 0.6
+    audioIntensity: 0.6
+  developerTimeMultiplier: 1
+  lensingRadiusDegrees: 28
+  blackHoleRadiusDegrees: 9
+  comfortModeDefault: 0
