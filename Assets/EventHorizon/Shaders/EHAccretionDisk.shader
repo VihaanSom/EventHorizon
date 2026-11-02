@@ -30,19 +30,30 @@ Shader "EventHorizon/AccretionDisk"
             float _EH_InnerBoost;
             float _EH_Doppler;
 
+            struct Attributes
+            {
+                float3 positionOS : POSITION;
+                float2 uv : TEXCOORD0;
+                UNITY_VERTEX_INPUT_INSTANCE_ID
+            };
+
             struct Varyings
             {
                 float4 positionCS : SV_POSITION;
                 float2 uv : TEXCOORD0;
                 float3 worldPos : TEXCOORD1;
+                UNITY_VERTEX_OUTPUT_STEREO
             };
 
-            Varyings Vert(float3 positionOS : POSITION, float2 uv : TEXCOORD0)
+            Varyings Vert(Attributes input)
             {
-                Varyings o;
-                o.worldPos = mul(unity_ObjectToWorld, float4(positionOS, 1.0)).xyz;
-                o.positionCS = TransformObjectToHClip(positionOS);
-                o.uv = uv;
+                Varyings o = (Varyings)0;
+                UNITY_SETUP_INSTANCE_ID(input);
+                UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(o);
+
+                o.worldPos = mul(unity_ObjectToWorld, float4(input.positionOS, 1.0)).xyz;
+                o.positionCS = TransformObjectToHClip(input.positionOS);
+                o.uv = input.uv;
                 return o;
             }
 
@@ -69,6 +80,7 @@ Shader "EventHorizon/AccretionDisk"
 
             half4 Frag(Varyings i) : SV_Target
             {
+                UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(i);
                 float r = saturate(i.uv.y);
 
                 // Keplerian differential rotation: inner plasma completes orbits significantly faster

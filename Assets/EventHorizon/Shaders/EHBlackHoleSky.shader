@@ -34,18 +34,28 @@ Shader "EventHorizon/BlackHoleSky"
             float3 _EH_BackgroundTint;
             float3 _EH_HoleDir;
 
+            struct Attributes
+            {
+                float3 positionOS : POSITION;
+                UNITY_VERTEX_INPUT_INSTANCE_ID
+            };
+
             struct Varyings
             {
                 float4 positionCS : SV_POSITION;
                 float3 dirWS : TEXCOORD0;
+                UNITY_VERTEX_OUTPUT_STEREO
             };
 
-            Varyings Vert(float3 positionOS : POSITION)
+            Varyings Vert(Attributes input)
             {
-                Varyings o;
-                float3 world = mul(unity_ObjectToWorld, float4(positionOS, 1.0)).xyz;
-                o.dirWS = world - _WorldSpaceCameraPos;
-                o.positionCS = TransformObjectToHClip(positionOS);
+                Varyings o = (Varyings)0;
+                UNITY_SETUP_INSTANCE_ID(input);
+                UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(o);
+
+                float3 world = mul(unity_ObjectToWorld, float4(input.positionOS, 1.0)).xyz;
+                o.dirWS = world - GetCameraPositionWS();
+                o.positionCS = TransformObjectToHClip(input.positionOS);
                 return o;
             }
 
@@ -98,6 +108,7 @@ Shader "EventHorizon/BlackHoleSky"
 
             half4 Frag(Varyings input) : SV_Target
             {
+                UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(input);
                 float3 dir = normalize(input.dirWS);
                 float3 hole = normalize(_EH_HoleDir);
                 if (dot(hole, hole) < 0.1) hole = float3(0, 0, 1);

@@ -41,13 +41,15 @@ Shader "EventHorizon/Dust"
                 float4 positionCS : SV_POSITION;
                 float2 uv : TEXCOORD0;
                 UNITY_VERTEX_INPUT_INSTANCE_ID
+                UNITY_VERTEX_OUTPUT_STEREO
             };
 
             Varyings Vert(Attributes v)
             {
-                Varyings o;
+                Varyings o = (Varyings)0;
                 UNITY_SETUP_INSTANCE_ID(v);
                 UNITY_TRANSFER_INSTANCE_ID(v, o);
+                UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(o);
                 o.positionCS = TransformObjectToHClip(v.positionOS);
                 o.uv = v.uv;
                 return o;
@@ -56,6 +58,7 @@ Shader "EventHorizon/Dust"
             half4 Frag(Varyings i) : SV_Target
             {
                 UNITY_SETUP_INSTANCE_ID(i);
+                UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(i);
 
                 if (_EH_StreakStretch > 1.2)
                 {

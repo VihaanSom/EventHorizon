@@ -37,6 +37,7 @@ Shader "EventHorizon/Starfield"
                 float2 corner : TEXCOORD0;    // quad corner -1..1
                 float2 sizeMag : TEXCOORD1;   // x: size, y: magnitude 0..1+
                 float2 tintRef : TEXCOORD2;   // x: tint 0..1, y: reference flag
+                UNITY_VERTEX_INPUT_INSTANCE_ID
             };
 
             struct Varyings
@@ -46,13 +47,17 @@ Shader "EventHorizon/Starfield"
                 float magnitude : TEXCOORD1;
                 float tint : TEXCOORD2;
                 float fade : TEXCOORD3;
+                UNITY_VERTEX_OUTPUT_STEREO
             };
 
             Varyings Vert(Attributes v)
             {
-                Varyings o;
+                Varyings o = (Varyings)0;
+                UNITY_SETUP_INSTANCE_ID(v);
+                UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(o);
+
                 float3 centreWS = mul(unity_ObjectToWorld, float4(v.positionOS, 1.0)).xyz;
-                float3 toStar = centreWS - _WorldSpaceCameraPos;
+                float3 toStar = centreWS - GetCameraPositionWS();
                 float dist = max(length(toStar), 0.001);
                 float3 dir = toStar / dist;
                 float3 hole = normalize(_EH_HoleDir);
@@ -109,6 +114,7 @@ Shader "EventHorizon/Starfield"
 
             half4 Frag(Varyings i) : SV_Target
             {
+                UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(i);
                 float r = length(i.corner);
 
                 // Razor-sharp Airy disk core (pin-point stellar clarity in VR pancake lenses)

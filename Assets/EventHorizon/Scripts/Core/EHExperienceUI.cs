@@ -5,10 +5,9 @@ using UnityEngine.UI;
 namespace EventHorizon
 {
     /// <summary>
-    /// Builds its own minimal Canvas at runtime (start prompt, pause note,
+    /// Builds its own VR-compatible WorldSpace Canvas at runtime (start prompt, pause note,
     /// comfort flash, farewell fade, end card). Keeps the hand-authored scenes
-    /// free of fragile UI prefab wiring. Final card distinguishes established
-    /// physics from approximation and artistic interpretation.
+    /// free of fragile UI prefab wiring.
     /// </summary>
     [AddComponentMenu("EventHorizon/Core/Experience UI")]
     public class EHExperienceUI : MonoBehaviour
@@ -34,40 +33,67 @@ namespace EventHorizon
         {
             if (canvas != null) return;
             var root = new GameObject("EH_UI");
-            root.transform.SetParent(transform, false);
+            
+            var cam = Camera.main;
+            if (cam != null)
+            {
+                root.transform.SetParent(cam.transform, false);
+                root.transform.localPosition = new Vector3(0f, 0f, 2.2f);
+                root.transform.localRotation = Quaternion.identity;
+            }
+            else
+            {
+                root.transform.SetParent(transform, false);
+                root.transform.position = new Vector3(0f, 0f, 2.2f);
+            }
+            root.transform.localScale = Vector3.one * 0.002f;
+
             canvas = root.AddComponent<Canvas>();
-            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+            canvas.renderMode = RenderMode.WorldSpace;
             canvas.sortingOrder = 100;
-            root.AddComponent<CanvasScaler>();
+            
+            var rt = root.GetComponent<RectTransform>();
+            if (rt != null) rt.sizeDelta = new Vector2(1000f, 600f);
+
             root.AddComponent<GraphicRaycaster>();
             canvasGroup = root.AddComponent<CanvasGroup>();
 
-            fadeImage = new GameObject("Fade").AddComponent<Image>();
-            fadeImage.transform.SetParent(root.transform, false);
+            // Fade image: starts with alpha 0 so it never obscures the view if unmanaged
+            var fadeGo = new GameObject("Fade");
+            fadeGo.transform.SetParent(root.transform, false);
+            fadeImage = fadeGo.AddComponent<Image>();
             fadeImage.rectTransform.anchorMin = Vector2.zero;
             fadeImage.rectTransform.anchorMax = Vector2.one;
-            fadeImage.rectTransform.offsetMin = Vector2.zero;
-            fadeImage.rectTransform.offsetMax = Vector2.zero;
-            fadeImage.color = new Color(0f, 0f, 0f, 1f);
+            fadeImage.rectTransform.offsetMin = new Vector2(-500f, -500f);
+            fadeImage.rectTransform.offsetMax = new Vector2(500f, 500f);
+            fadeImage.color = new Color(0f, 0f, 0f, 0f);
 
-            centerText = MakeText(root.transform, "Center", 26);
+            centerText = MakeText(root.transform, "Center", 28);
             endText = MakeText(root.transform, "EndCard", 20);
             endText.gameObject.SetActive(false);
-
-            StartCoroutine(FadeFromBlack(2f));
         }
 
         Text MakeText(Transform parent, string name, int size)
         {
-            var t = new GameObject(name).AddComponent<Text>();
-            t.transform.SetParent(parent, false);
-            t.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            var go = new GameObject(name);
+            go.transform.SetParent(parent, false);
+            var t = go.AddComponent<Text>();
+            
+            Font font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            if (font == null) font = Resources.GetBuiltinResource<Font>("Arial.ttf");
+            if (font == null)
+            {
+                try { font = Font.CreateDynamicFontFromOSFont("Arial", size); }
+                catch (System.Exception) { }
+            }
+            if (font != null) t.font = font;
+
             t.fontSize = size;
             t.alignment = TextAnchor.MiddleCenter;
-            t.color = new Color(0.85f, 0.9f, 1f, 1f);
+            t.color = new Color(0.9f, 0.94f, 1f, 1f);
             var rt = t.rectTransform;
-            rt.anchorMin = new Vector2(0.1f, 0.2f);
-            rt.anchorMax = new Vector2(0.9f, 0.8f);
+            rt.anchorMin = new Vector2(0.05f, 0.15f);
+            rt.anchorMax = new Vector2(0.95f, 0.85f);
             rt.offsetMin = Vector2.zero;
             rt.offsetMax = Vector2.zero;
             return t;
@@ -78,7 +104,7 @@ namespace EventHorizon
             if (centerText != null)
             {
                 centerText.gameObject.SetActive(true);
-                centerText.text = "EVENT HORIZON\n\nLook around freely. You will not be steered.\n\nPress Start / Space / Tap to begin the descent";
+                centerText.text = "EVENT HORIZON\n\nLook around freely.\n\nPress any Trigger / Button to begin the descent";
             }
         }
 
@@ -92,7 +118,7 @@ namespace EventHorizon
             if (centerText != null)
             {
                 centerText.gameObject.SetActive(true);
-                centerText.text = "Paused — press again to resume";
+                centerText.text = "PAUSED\n\nPress again to resume";
             }
         }
 
@@ -101,7 +127,7 @@ namespace EventHorizon
         public void FlashComfortNote(bool on)
         {
             if (flashRoutine != null) StopCoroutine(flashRoutine);
-            flashRoutine = StartCoroutine(Flash(on ? "Comfort mode: ON (streaks reduced)" : "Comfort mode: OFF"));
+            flashRoutine = StartCoroutine(Flash(on ? "Comfort mode: ON" : "Comfort mode: OFF"));
         }
 
         IEnumerator Flash(string msg)
@@ -112,8 +138,8 @@ namespace EventHorizon
             centerText.text = msg;
             yield return new WaitForSecondsRealtime(2f);
             centerText.text = prev;
-            if (prev == string.Empty || prev.StartsWith("EVENT") || prev.StartsWith("Paused"))
-                centerText.gameObject.SetActive(prev.StartsWith("Paused"));
+            if (prev == string.Empty || prev.StartsWith("EVENT") || prev.StartsWith("PAUSED"))
+                centerText.gameObject.SetActive(prev.StartsWith("PAUSED"));
         }
 
         public void ShowEndCard()
@@ -132,11 +158,11 @@ namespace EventHorizon
 
         public void ApplyFade(in EHPhaseSample s)
         {
-            // Final descent closes toward near-black; the fade quad eases it.
+            // Final descent closes toward near-black
             if (fadeImage != null && s.phaseIndex == 4)
             {
                 var c = fadeImage.color;
-                c.a = Mathf.Clamp01(s.phaseLocalT * 0.55f);
+                c.a = Mathf.Clamp01(s.phaseLocalT * 0.75f);
                 fadeImage.color = c;
             }
         }
@@ -144,22 +170,6 @@ namespace EventHorizon
         public void BeginFarewellFade(System.Action onDone)
         {
             StartCoroutine(Farewell(onDone));
-        }
-
-        IEnumerator FadeFromBlack(float seconds)
-        {
-            float t = 0f;
-            while (t < seconds)
-            {
-                t += Time.unscaledDeltaTime;
-                if (fadeImage != null)
-                {
-                    var c = fadeImage.color;
-                    c.a = 1f - Mathf.Clamp01(t / seconds);
-                    fadeImage.color = c;
-                }
-                yield return null;
-            }
         }
 
         IEnumerator Farewell(System.Action onDone)

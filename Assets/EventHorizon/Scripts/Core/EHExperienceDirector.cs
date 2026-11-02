@@ -41,6 +41,12 @@ namespace EventHorizon
 
         void Awake()
         {
+            var cam = Camera.main;
+            if (cam != null && cam.GetComponent<EHXRHeadTracker>() == null)
+            {
+                cam.gameObject.AddComponent<EHXRHeadTracker>();
+            }
+
             if (timeline == null) timeline = GetComponent<EHTimelineController>();
             if (timeline != null && settings != null) timeline.Configure(settings);
             comfortMode = settings != null && settings.comfortModeDefault;
@@ -68,6 +74,16 @@ namespace EventHorizon
         {
             ApplySample(timeline != null ? timeline.Sample(0f) : default, true);
             ui?.ShowStartPrompt();
+            StartCoroutine(AutoStartRoutine());
+        }
+
+        System.Collections.IEnumerator AutoStartRoutine()
+        {
+            yield return new WaitForSeconds(3.5f);
+            if (timeline != null && timeline.State == EHTimelineState.Stopped)
+            {
+                StartExperience();
+            }
         }
 
         void Update()

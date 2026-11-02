@@ -53,8 +53,18 @@ namespace EventHorizon.XR
             // Optional XR bindings: silently skipped when no XR layout exists.
             try
             {
-                if (name == "EH_Start") action.AddBinding(startButtonPath);
-                if (name == "EH_Pause") action.AddBinding(pauseButtonPath);
+                if (name == "EH_Start")
+                {
+                    action.AddBinding(startButtonPath);
+                    action.AddBinding("<XRController>{RightHand}/trigger");
+                    action.AddBinding("<XRController>{RightHand}/primaryButton");
+                    action.AddBinding("<XRController>{LeftHand}/primaryButton");
+                }
+                if (name == "EH_Pause")
+                {
+                    action.AddBinding(pauseButtonPath);
+                    action.AddBinding("<XRController>{LeftHand}/menu");
+                }
             }
             catch (System.Exception) { }
             action.Enable();
@@ -63,6 +73,23 @@ namespace EventHorizon.XR
 
         void Update()
         {
+            // XR Controller fallback query
+            var xrControllers = new System.Collections.Generic.List<UnityEngine.XR.InputDevice>();
+            UnityEngine.XR.InputDevices.GetDevicesWithCharacteristics(UnityEngine.XR.InputDeviceCharacteristics.Controller, xrControllers);
+            for (int i = 0; i < xrControllers.Count; i++)
+            {
+                if (xrControllers[i].TryGetFeatureValue(UnityEngine.XR.CommonUsages.triggerButton, out bool trg) && trg)
+                {
+                    onStart?.Invoke();
+                    break;
+                }
+                if (xrControllers[i].TryGetFeatureValue(UnityEngine.XR.CommonUsages.primaryButton, out bool btn) && btn)
+                {
+                    onStart?.Invoke();
+                    break;
+                }
+            }
+
             // Touchscreen tap = start/advance (mobile fallback).
             if (Touchscreen.current != null && Touchscreen.current.primaryTouch.press.wasPressedThisFrame)
                 onStart?.Invoke();
