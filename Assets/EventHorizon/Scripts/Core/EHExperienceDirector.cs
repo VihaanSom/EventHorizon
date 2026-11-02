@@ -196,56 +196,63 @@ namespace EventHorizon
 
             Vector3 holePos = blackHole != null ? blackHole.transform.position : new Vector3(0f, 2f, 150f);
 
-            // 5-Act smooth descent trajectory:
-            // Act I (0.00 - 0.15): Approach from deep space (280m -> 130m)
-            // Act II (0.15 - 0.40): Transition into accretion disk plane (130m -> 42m)
-            // Act III (0.40 - 0.60): Gravitational plunge into ISCO (42m -> 12m)
-            // Act IV (0.60 - 0.80): Event horizon crossing (12m -> 1.5m)
-            // Act V (0.80 - 1.00): Singularity plunge (1.5m -> 0.05m)
+            // 5-Act cinematic elevated descent trajectory matching authentic Interstellar three-quarters perspective:
+            // Act I (0.00 - 0.15): High-altitude deep space approach (240m -> 120m, elevation 52m -> 34m)
+            // Act II (0.15 - 0.40): Majestic three-quarters sweep over accretion disk (120m -> 48m, elevation 34m -> 18m)
+            // Act III (0.40 - 0.60): Gravitational spiral down to ISCO rim (48m -> 15m, elevation 18m -> 7.5m)
+            // Act IV (0.60 - 0.80): Event horizon boundary descent (15m -> 2.5m, elevation 7.5m -> 1.5m)
+            // Act V (0.80 - 1.00): Plunge into singularity core (2.5m -> 0.05m)
             Vector3 targetPos;
             if (u < 0.15f)
             {
                 float tPhase = u / 0.15f;
-                Vector3 p0 = holePos + new Vector3(0f, 18f, -280f);
-                Vector3 p1 = holePos + new Vector3(0f, 7f, -130f);
+                Vector3 p0 = holePos + new Vector3(0f, 52f, -240f);
+                Vector3 p1 = holePos + new Vector3(0f, 34f, -120f);
                 targetPos = Vector3.Lerp(p0, p1, Mathf.SmoothStep(0f, 1f, tPhase));
             }
             else if (u < 0.40f)
             {
                 float tPhase = (u - 0.15f) / 0.25f;
-                Vector3 p0 = holePos + new Vector3(0f, 7f, -130f);
-                Vector3 p1 = holePos + new Vector3(0f, 2.2f, -42f);
+                Vector3 p0 = holePos + new Vector3(0f, 34f, -120f);
+                Vector3 p1 = holePos + new Vector3(0f, 18f, -48f);
                 targetPos = Vector3.Lerp(p0, p1, Mathf.SmoothStep(0f, 1f, tPhase));
             }
             else if (u < 0.60f)
             {
                 float tPhase = (u - 0.40f) / 0.20f;
-                Vector3 p0 = holePos + new Vector3(0f, 2.2f, -42f);
-                Vector3 p1 = holePos + new Vector3(0f, 0.8f, -12f);
+                Vector3 p0 = holePos + new Vector3(0f, 18f, -48f);
+                Vector3 p1 = holePos + new Vector3(0f, 7.5f, -15f);
                 targetPos = Vector3.Lerp(p0, p1, Mathf.SmoothStep(0f, 1f, tPhase));
             }
             else if (u < 0.80f)
             {
                 float tPhase = (u - 0.60f) / 0.20f;
-                Vector3 p0 = holePos + new Vector3(0f, 0.8f, -12f);
-                Vector3 p1 = holePos + new Vector3(0f, 0.2f, -1.5f);
+                Vector3 p0 = holePos + new Vector3(0f, 7.5f, -15f);
+                Vector3 p1 = holePos + new Vector3(0f, 1.5f, -2.5f);
                 targetPos = Vector3.Lerp(p0, p1, Mathf.SmoothStep(0f, 1f, tPhase));
             }
             else
             {
                 float tPhase = (u - 0.80f) / 0.20f;
-                Vector3 p0 = holePos + new Vector3(0f, 0.2f, -1.5f);
+                Vector3 p0 = holePos + new Vector3(0f, 1.5f, -2.5f);
                 Vector3 p1 = holePos + new Vector3(0f, 0.0f, -0.05f);
                 targetPos = Vector3.Lerp(p0, p1, Mathf.SmoothStep(0f, 1f, tPhase));
             }
 
+            Vector3 lookDir = (holePos - targetPos).normalized;
+            Quaternion targetRot = lookDir.sqrMagnitude > 0.001f
+                ? Quaternion.LookRotation(lookDir, Vector3.up)
+                : playerRig.rotation;
+
             if (snap)
             {
                 playerRig.position = targetPos;
+                playerRig.rotation = targetRot;
             }
             else
             {
                 playerRig.position = Vector3.Lerp(playerRig.position, targetPos, 1f - Mathf.Exp(-4f * Time.unscaledDeltaTime));
+                playerRig.rotation = Quaternion.Slerp(playerRig.rotation, targetRot, 1f - Mathf.Exp(-4f * Time.unscaledDeltaTime));
             }
         }
 

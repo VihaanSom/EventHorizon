@@ -94,14 +94,14 @@ Shader "EventHorizon/Starfield"
                     radialWS = cross(tangentWS, dir);
                 }
 
-                // Tidal stretching: as ang approaches holeAng, stretch along tangentWS and compress along radialWS
+                // Subtle tidal stretching: avoid giant smudges in VR
                 float prox = saturate(1.0 - (ang - holeAng) / (holeAng * 2.2 + 1e-4));
-                float tangStretch = 1.0 + prox * prox * (4.2 * _EH_LensingStrength);
-                float radCompress = max(0.35, 1.0 - prox * 0.55);
+                float tangStretch = 1.0 + prox * prox * (0.8 * _EH_LensingStrength);
+                float radCompress = max(0.70, 1.0 - prox * 0.30);
 
                 // Transform to Camera View Space for correct stereoscopic VR orientation
                 float4 viewPos = mul(UNITY_MATRIX_V, float4(bentCentre, 1.0));
-                float worldSize = v.sizeMag.x * _EH_PointScale * dist;
+                float worldSize = v.sizeMag.x * _EH_PointScale * 0.40 * dist;
 
                 // Tangential and radial basis vectors in view space
                 float3 viewTan = mul((float3x3)UNITY_MATRIX_V, tangentWS);
@@ -128,17 +128,15 @@ Shader "EventHorizon/Starfield"
                 UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(i);
                 float r = length(i.corner);
 
-                // Razor-sharp Airy disk core (pin-point stellar clarity in VR pancake lenses)
-                float core = exp(-r * r * 16.0);
-                // Soft optical diffraction halo
-                float halo = exp(-r * 2.8) * 0.35;
-                float sprite = core + halo;
+                // Razor-sharp pin-point Airy diffraction core (crystal-clear in VR pancake lenses)
+                float core = exp(-r * r * 45.0);
+                float sprite = core;
 
-                // 4-point diffraction cross for bright reference hypergiants
+                // Subtle 4-point diffraction cross for bright reference hypergiants
                 float isRef = step(9.5, i.tint);
-                float crossSpikes = exp(-abs(i.corner.x) * 14.0) * exp(-abs(i.corner.y) * 2.2)
-                                  + exp(-abs(i.corner.y) * 14.0) * exp(-abs(i.corner.x) * 2.2);
-                sprite += crossSpikes * isRef * 0.45;
+                float crossSpikes = exp(-abs(i.corner.x) * 22.0) * exp(-abs(i.corner.y) * 3.5)
+                                  + exp(-abs(i.corner.y) * 22.0) * exp(-abs(i.corner.x) * 3.5);
+                sprite += crossSpikes * isRef * 0.35;
 
                 // Stellar spectral classifications:
                 // O/B (Blue-white 25000K), A/F (Pure white 9000K), G (Warm yellow 5800K), K/M (Amber/Red 3500K)

@@ -25,10 +25,10 @@ Material:
     m_TexEnvs: []
     m_Ints: []
     m_Floats:
-    - _EH_DiskEmission: 0.8948126
-    - _EH_Doppler: 0.65
-    - _EH_FlowTime: 10.690063
-    - _EH_InnerBoost: 2.2
+    - _EH_DiskEmission: 1.0
+    - _EH_Doppler: 0.4
+    - _EH_FlowTime: 0
+    - _EH_InnerBoost: 1.0
     m_Colors: []
   m_BuildTextureStacks: []
   m_AllowLocking: 1

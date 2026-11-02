@@ -4,9 +4,9 @@ namespace EventHorizon.BlackHole
 {
     /// <summary>
     /// Sole writer of the shared black-hole shader globals (silhouette size,
-    /// rim, photon ring). Centered on the sky dome at optical infinity, while
-    /// dynamically adjusting apparent angular size and directional vector as
-    /// the player falls towards the singularity.
+    /// rim, photon ring). Anchored firmly in world space: the sky dome centers
+    /// on the camera position but NEVER rotates with head movement, ensuring
+    /// the black hole stays fixed in 3D space when the player turns their head in VR.
     /// </summary>
     [AddComponentMenu("EventHorizon/BlackHole/Black Hole Controller")]
     [ExecuteAlways]
@@ -18,9 +18,9 @@ namespace EventHorizon.BlackHole
         [SerializeField] Material skyMaterial;
 
         [Header("Silhouette")]
-        [Range(0.5f, 3f)] public float baseAngularRadius = 1.1f;
-        [Range(0f, 1f)] public float rimSoftness = 0.25f;
-        [Range(0f, 5f)] public float photonRingIntensity = 2.4f;
+        [Range(0.5f, 3f)] public float baseAngularRadius = 1.0f;
+        [Range(0f, 1f)] public float rimSoftness = 0.20f;
+        [Range(0f, 5f)] public float photonRingIntensity = 1.4f;
         [Range(0f, 1f)] public float interiorBlackness = 1.0f;
 
         [Header("Sky dome (generated once at runtime)")]
@@ -63,41 +63,42 @@ namespace EventHorizon.BlackHole
 
         void Update()
         {
-            if (skyDomeTransform != null && Camera.main != null && skyDomeTransform.parent != Camera.main.transform)
-            {
-                skyDomeTransform.SetParent(Camera.main.transform, false);
-                skyDomeTransform.localPosition = Vector3.zero;
-                skyDomeTransform.localRotation = Quaternion.identity;
-            }
-
             if (!Application.isPlaying) return;
             displayedScale = Mathf.Lerp(displayedScale, currentScale,
                 1f - Mathf.Exp(-responseSpeed * Time.deltaTime));
+        }
+
+        void LateUpdate()
+        {
+            Vector3 camPos = Camera.main != null ? Camera.main.transform.position : Vector3.zero;
+
+            // Center dome on camera translation, but STRICTLY lock rotation to world identity
+            // so turning your head in VR rotates your view relative to the sky, not the sky with your head!
+            if (skyDomeTransform != null)
+            {
+                skyDomeTransform.position = camPos;
+                skyDomeTransform.rotation = Quaternion.identity;
+            }
+
             Push(displayedScale);
         }
 
         void EnsureSkyDome()
         {
             if (skyMaterial == null) return;
-            var existing = transform.Find("EH_SkyDome");
+            var existing = GameObject.Find("EH_SkyDome");
             if (existing != null)
             {
-                skyDomeTransform = existing;
+                skyDomeTransform = existing.transform;
+                skyDomeTransform.SetParent(null, false);
                 return;
             }
 
             var dome = new GameObject("EH_SkyDome");
-            var cam = Camera.main;
-            if (cam != null)
-            {
-                dome.transform.SetParent(cam.transform, false);
-            }
-            else
-            {
-                dome.transform.SetParent(transform, false);
-            }
-            dome.transform.localPosition = Vector3.zero;
-            dome.transform.localRotation = Quaternion.identity;
+            // Unparented so it lives in world root, completely decoupled from camera rotation
+            dome.transform.SetParent(null, false);
+            dome.transform.position = Vector3.zero;
+            dome.transform.rotation = Quaternion.identity;
             var filter = dome.AddComponent<MeshFilter>();
             var renderer = dome.AddComponent<MeshRenderer>();
             filter.sharedMesh = BuildSkyDome(skyDomeRadius, skyDomeSegments);
@@ -151,13 +152,12 @@ namespace EventHorizon.BlackHole
                 ? holeAnchor.position
                 : transform.position;
             Vector3 dir = (target - camPos).normalized;
-            if (dir.sqrMagnitude < 0.01f) dir = transform.forward;
             if (dir.sqrMagnitude < 0.01f) dir = Vector3.forward;
 
-            // Physical apparent angular radius: grows smoothly as player approaches singularity
+            // Physical apparent angular radius based on true world distance
             float dist = Mathf.Max(0.5f, Vector3.Distance(camPos, target));
-            float distanceGain = Mathf.Clamp(100f / dist, 0.7f, 9.5f);
-            float effectiveScale = scale * distanceGain * 0.55f;
+            float distanceGain = Mathf.Clamp(100f / dist, 0.7f, 8.5f);
+            float effectiveScale = scale * distanceGain * 0.50f;
 
             Shader.SetGlobalVector(HoleDirId, dir);
             Shader.SetGlobalFloat(HoleRadiusId, baseAngularRadius * effectiveScale);

@@ -12,9 +12,9 @@ namespace EventHorizon.Environment
     [RequireComponent(typeof(MeshFilter), typeof(MeshRenderer))]
     public class EHStarfieldController : MonoBehaviour
     {
-        [Header("Population (mesh rebuilt only in the editor)")]
-        [SerializeField] int starCount = 4200;
-        [SerializeField] int brightReferenceStars = 24;
+        [Header("Population")]
+        [SerializeField] int starCount = 2800;
+        [SerializeField] int brightReferenceStars = 32;
         [SerializeField] float sphereRadius = 800f;
         [SerializeField] int seed = 1337;
 
@@ -23,13 +23,14 @@ namespace EventHorizon.Environment
         [SerializeField, Range(0f, 2f)] float brightnessGain = 1f;
 
         static readonly int BrightnessId = Shader.PropertyToID("_EH_StarBrightness");
+        static readonly int SkyExposureId = Shader.PropertyToID("_EH_SkyExposure");
 
         float currentBrightness = 1f;
 
         void Awake() => EnsureMesh();
         void OnValidate()
         {
-            starCount = Mathf.Clamp(starCount, 100, 8000);
+            starCount = Mathf.Max(0, starCount);
             EnsureMesh();
         }
 
@@ -37,16 +38,18 @@ namespace EventHorizon.Environment
         public void ApplyBrightness(float b, bool snap)
         {
             currentBrightness = Mathf.Max(0f, b) * brightnessGain;
+            Shader.SetGlobalFloat(SkyExposureId, currentBrightness);
             if (snap && starMaterial != null)
                 starMaterial.SetFloat(BrightnessId, currentBrightness);
         }
 
         void Update()
         {
-            if (starMaterial == null || !Application.isPlaying) return;
-            float shown = starMaterial.GetFloat(BrightnessId);
-            starMaterial.SetFloat(BrightnessId,
-                Mathf.Lerp(shown, currentBrightness, 1f - Mathf.Exp(-2f * Time.deltaTime)));
+            if (!Application.isPlaying) return;
+            float shown = starMaterial != null ? starMaterial.GetFloat(BrightnessId) : currentBrightness;
+            float next = Mathf.Lerp(shown, currentBrightness, 1f - Mathf.Exp(-2f * Time.deltaTime));
+            if (starMaterial != null) starMaterial.SetFloat(BrightnessId, next);
+            Shader.SetGlobalFloat(SkyExposureId, next);
         }
 
         void EnsureMesh()
@@ -58,6 +61,16 @@ namespace EventHorizon.Environment
             renderer.sharedMaterial = starMaterial;
             renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             renderer.receiveShadows = false;
+
+            // When starCount is 0, let the authentic NASA 8K EXR starfield take center stage!
+            if (starCount <= 0)
+            {
+                filter.sharedMesh = null;
+                renderer.enabled = false;
+                return;
+            }
+
+            renderer.enabled = true;
             if (filter.sharedMesh != null && filter.sharedMesh.name == MeshName())
                 return;
             filter.sharedMesh = BuildStarMesh(starCount, brightReferenceStars, sphereRadius, seed);
