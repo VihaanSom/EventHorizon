@@ -4,9 +4,9 @@ namespace EventHorizon.BlackHole
 {
     /// <summary>
     /// Sole writer of the shared black-hole shader globals (silhouette size,
-    /// rim, photon ring). The lensing controller forwards through here so only
-    /// one component ever touches these properties. No shadow maps are used:
-    /// the interior is unlit near-black by construction.
+    /// rim, photon ring). Centered on the sky dome at optical infinity, while
+    /// dynamically adjusting apparent angular size and directional vector as
+    /// the player falls towards the singularity.
     /// </summary>
     [AddComponentMenu("EventHorizon/BlackHole/Black Hole Controller")]
     [ExecuteAlways]
@@ -18,17 +18,17 @@ namespace EventHorizon.BlackHole
         [SerializeField] Material skyMaterial;
 
         [Header("Silhouette")]
-        [Range(0.5f, 3f)] public float baseAngularRadius = 1f;
-        [Range(0f, 1f)] public float rimSoftness = 0.35f;
-        [Range(0f, 3f)] public float photonRingIntensity = 1.2f;
-        [Range(0f, 1f)] public float interiorBlackness = 0.985f;
+        [Range(0.5f, 3f)] public float baseAngularRadius = 1.1f;
+        [Range(0f, 1f)] public float rimSoftness = 0.25f;
+        [Range(0f, 5f)] public float photonRingIntensity = 2.4f;
+        [Range(0f, 1f)] public float interiorBlackness = 1.0f;
 
         [Header("Sky dome (generated once at runtime)")]
         [SerializeField] float skyDomeRadius = 900f;
-        [SerializeField] int skyDomeSegments = 48;
+        [SerializeField] int skyDomeSegments = 64;
 
         [Header("Smoothing")]
-        [SerializeField] float responseSpeed = 2f;
+        [SerializeField] float responseSpeed = 3f;
 
         static readonly int HoleDirId = Shader.PropertyToID("_EH_HoleDir");
         static readonly int HoleRadiusId = Shader.PropertyToID("_EH_HoleRadius");
@@ -38,6 +38,7 @@ namespace EventHorizon.BlackHole
 
         float currentScale = 1f;
         float displayedScale = 1f;
+        Transform skyDomeTransform;
 
         void Awake() => EnsureSkyDome();
 
@@ -62,8 +63,14 @@ namespace EventHorizon.BlackHole
 
         void Update()
         {
+            if (skyDomeTransform != null && Camera.main != null && skyDomeTransform.parent != Camera.main.transform)
+            {
+                skyDomeTransform.SetParent(Camera.main.transform, false);
+                skyDomeTransform.localPosition = Vector3.zero;
+                skyDomeTransform.localRotation = Quaternion.identity;
+            }
+
             if (!Application.isPlaying) return;
-            // Gentle smoothing only; the timeline remains the authority.
             displayedScale = Mathf.Lerp(displayedScale, currentScale,
                 1f - Mathf.Exp(-responseSpeed * Time.deltaTime));
             Push(displayedScale);
@@ -72,15 +79,32 @@ namespace EventHorizon.BlackHole
         void EnsureSkyDome()
         {
             if (skyMaterial == null) return;
+            var existing = transform.Find("EH_SkyDome");
+            if (existing != null)
+            {
+                skyDomeTransform = existing;
+                return;
+            }
+
             var dome = new GameObject("EH_SkyDome");
-            dome.transform.SetParent(transform, false);
+            var cam = Camera.main;
+            if (cam != null)
+            {
+                dome.transform.SetParent(cam.transform, false);
+            }
+            else
+            {
+                dome.transform.SetParent(transform, false);
+            }
             dome.transform.localPosition = Vector3.zero;
+            dome.transform.localRotation = Quaternion.identity;
             var filter = dome.AddComponent<MeshFilter>();
             var renderer = dome.AddComponent<MeshRenderer>();
             filter.sharedMesh = BuildSkyDome(skyDomeRadius, skyDomeSegments);
             renderer.sharedMaterial = skyMaterial;
             renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             renderer.receiveShadows = false;
+            skyDomeTransform = dome.transform;
         }
 
         /// <summary>Deterministic inverted sphere; shader culls front faces.</summary>
@@ -115,8 +139,6 @@ namespace EventHorizon.BlackHole
             mesh.SetVertices(verts);
             mesh.SetIndices(indices.ToArray(), MeshTopology.Triangles, 0);
             mesh.RecalculateNormals();
-            // Explicit bounds: generated meshes default to zero-size and would
-            // otherwise be frustum-culled as invisible.
             mesh.bounds = new Bounds(Vector3.zero, Vector3.one * radius * 2.2f);
             mesh.UploadMeshData(true);
             return mesh;
@@ -132,16 +154,20 @@ namespace EventHorizon.BlackHole
             if (dir.sqrMagnitude < 0.01f) dir = transform.forward;
             if (dir.sqrMagnitude < 0.01f) dir = Vector3.forward;
 
-            // Keep the region dark: radius is an angle-like factor on the sky.
+            // Physical apparent angular radius: grows smoothly as player approaches singularity
+            float dist = Mathf.Max(0.5f, Vector3.Distance(camPos, target));
+            float distanceGain = Mathf.Clamp(100f / dist, 0.7f, 9.5f);
+            float effectiveScale = scale * distanceGain * 0.55f;
+
             Shader.SetGlobalVector(HoleDirId, dir);
-            Shader.SetGlobalFloat(HoleRadiusId, baseAngularRadius * scale);
+            Shader.SetGlobalFloat(HoleRadiusId, baseAngularRadius * effectiveScale);
             Shader.SetGlobalFloat(RimId, rimSoftness);
             Shader.SetGlobalFloat(RingId, photonRingIntensity);
             Shader.SetGlobalFloat(BlackId, interiorBlackness);
             if (skyMaterial != null)
             {
                 skyMaterial.SetVector(HoleDirId, dir);
-                skyMaterial.SetFloat(HoleRadiusId, baseAngularRadius * scale);
+                skyMaterial.SetFloat(HoleRadiusId, baseAngularRadius * effectiveScale);
             }
         }
     }

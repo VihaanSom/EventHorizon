@@ -22,16 +22,21 @@ Material:
   m_LockedProperties: 
   m_SavedProperties:
     serializedVersion: 3
-    m_TexEnvs: []
+    m_TexEnvs:
+    - _EH_SkyMap:
+        m_Texture: {fileID: 2800000, guid: a1b2c3d4e5f60718293a4b5c6d7e8f90, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
     m_Ints: []
     m_Floats:
+    - _EH_SkyExposure: 1.5
     - _EH_HoleRadius: 1
-    - _EH_InteriorBlack: 0.99
-    - _EH_LensingRadius: 28
-    - _EH_LensingStrength: 0.5
-    - _EH_PhotonRing: 1.8
-    - _EH_RimSoftness: 0.35
+    - _EH_InteriorBlack: 1.0
+    - _EH_LensingRadius: 35
+    - _EH_LensingStrength: 0.65
+    - _EH_PhotonRing: 2.2
+    - _EH_RimSoftness: 0.25
     m_Colors:
-    - _EH_BackgroundTint: {r: 0.012, g: 0.016, b: 0.035, a: 1}
+    - _EH_BackgroundTint: {r: 0.002, g: 0.003, b: 0.008, a: 1}
   m_BuildTextureStacks: []
   m_AllowLocking: 1

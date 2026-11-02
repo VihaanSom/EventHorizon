@@ -3,23 +3,23 @@ using UnityEngine;
 namespace EventHorizon.Environment
 {
     /// <summary>
-    /// Sparse drifting dust + velocity-stretched streaks via two instanced draws
-    /// from fixed pools. Never obscures the hole: spawn volume keeps a clear
-    /// cone toward the black-hole anchor. Comfort scaling handled by director.
+    /// Subtle, crisp cosmic micro-dust + high-velocity relativistic plunge needles.
+    /// Uses preallocated instanced quad draws. Keeps an automatic clearance radius
+    /// around the camera so particles never clip through the player's eyes in VR.
     /// </summary>
     [AddComponentMenu("EventHorizon/Environment/Dust Controller")]
     public class EHDustController : MonoBehaviour
     {
         [Header("Pools (fixed size, preallocated)")]
-        [SerializeField] int maxDust = 320;
-        [SerializeField] int maxStreaks = 192;
+        [SerializeField] int maxDust = 240;
+        [SerializeField] int maxStreaks = 160;
         [SerializeField] Material dustMaterial;
         [SerializeField] Material streakMaterial;
 
         [Header("Volume")]
         [SerializeField] Transform holeAnchor;
-        [SerializeField] float fieldRadius = 60f;
-        [SerializeField] float fieldDepth = 120f;
+        [SerializeField] float fieldRadius = 80f;
+        [SerializeField] float fieldDepth = 140f;
         [SerializeField] int seed = 4242;
 
         static readonly int AlphaId = Shader.PropertyToID("_EH_DustAlpha");
@@ -38,8 +38,6 @@ namespace EventHorizon.Environment
 
         void Awake()
         {
-            // DrawMeshInstanced throws unless the material opts into instancing.
-            // Enforced here so the scene works even if the .mat flag is reset.
             if (dustMaterial != null) dustMaterial.enableInstancing = true;
             if (streakMaterial != null) streakMaterial.enableInstancing = true;
             quadMesh = BuildQuad();
@@ -48,8 +46,9 @@ namespace EventHorizon.Environment
             dustMatrices = new Matrix4x4[maxDust];
             streakMatrices = new Matrix4x4[maxStreaks];
             var rng = new System.Random(seed);
-            Scatter(dust, rng, 0.4f, 1.4f);
-            Scatter(streaks, rng, 1.5f, 4f);
+            // Crisp, subtle sub-meter micro-particles (not massive 4m blobs)
+            Scatter(dust, rng, 0.04f, 0.12f);
+            Scatter(streaks, rng, 0.08f, 0.22f);
             cachedCamera = Camera.main;
         }
 
@@ -68,7 +67,7 @@ namespace EventHorizon.Environment
                         (float)(rng.NextDouble() * 2.0 - 1.0),
                         (float)(rng.NextDouble() * 2.0 - 1.0)),
                     size = Mathf.Lerp(minSize, maxSize, (float)rng.NextDouble()),
-                    brightness = 0.3f + 0.7f * (float)rng.NextDouble(),
+                    brightness = 0.4f + 0.6f * (float)rng.NextDouble(),
                     phase = (float)rng.NextDouble()
                 };
             }
@@ -98,11 +97,11 @@ namespace EventHorizon.Environment
             density = Mathf.Clamp01(d);
             streakAmount = Mathf.Clamp01(streak);
             motion = Mathf.Clamp01(envMotion);
-            if (dustMaterial != null) dustMaterial.SetFloat(AlphaId, density);
+            if (dustMaterial != null) dustMaterial.SetFloat(AlphaId, density * 0.45f);
             if (streakMaterial != null)
             {
-                streakMaterial.SetFloat(StretchId, 1f + streakAmount * 6f);
-                streakMaterial.SetFloat(AlphaId, Mathf.Max(0.15f, streakAmount));
+                streakMaterial.SetFloat(StretchId, 1f + streakAmount * 5f);
+                streakMaterial.SetFloat(AlphaId, Mathf.Max(0.12f, streakAmount * 0.5f));
             }
         }
 
@@ -130,26 +129,35 @@ namespace EventHorizon.Environment
         {
             if (cachedCamera == null) cachedCamera = Camera.main;
             Vector3 camPos = cachedCamera != null ? cachedCamera.transform.position : Vector3.zero;
+
             for (int i = 0; i < active; i++)
             {
                 EHDustParticle p = pool[i];
-                // Deterministic drift: slow ambient wander + inward stream toward the hole.
                 float wobble = Mathf.Sin(t * 0.4f + p.phase * 6.2831f);
                 Vector3 drift = p.velocitySeed * (0.35f + speed * 0.4f) * wobble;
                 Vector3 flow = holeDir * speed * (2f + p.phase * 4f);
                 Vector3 pos = p.position + (drift + flow) * (t * 0.12f % 8f + p.phase * 2f);
                 pos = Wrap(pos);
 
+                // Keep particles out of a 2.5m exclusion sphere around the camera
+                Vector3 toCam = camPos - pos;
+                float d = toCam.magnitude;
+                if (d < 2.5f)
+                {
+                    pos -= toCam.normalized * (2.5f - d + 0.5f);
+                }
+
                 Vector3 vel = (flow + drift).normalized;
                 if (vel.sqrMagnitude < 1e-6f) vel = holeDir;
-                Vector3 toCam = (camPos - pos).normalized;
-                if (toCam.sqrMagnitude < 1e-6f) toCam = Vector3.back;
-                Vector3 x = Vector3.Cross(vel, toCam).normalized;
+                Vector3 camDir = (camPos - pos).normalized;
+                if (camDir.sqrMagnitude < 1e-6f) camDir = Vector3.back;
+                Vector3 x = Vector3.Cross(vel, camDir).normalized;
                 if (x.sqrMagnitude < 1e-6f) x = Vector3.right;
                 Vector3 z = Vector3.Cross(x, vel).normalized;
 
-                float len = stretch ? p.size * (1f + streakAmount * 8f) : p.size;
-                float wid = stretch ? p.size * 0.35f : p.size;
+                // Fine needles for streaks (thin width, elegant streak length)
+                float len = stretch ? p.size * (1f + streakAmount * 6f) : p.size;
+                float wid = stretch ? p.size * 0.10f : p.size;
                 var basis = new Matrix4x4(x * wid, vel * len, z * wid, new Vector4(pos.x, pos.y, pos.z, 1f));
                 matrices[i] = transform.localToWorldMatrix * basis;
             }
@@ -157,7 +165,6 @@ namespace EventHorizon.Environment
 
         Vector3 Wrap(Vector3 p)
         {
-            // Recirculate inside the box so the field never empties (branchless-ish).
             if (p.z > fieldDepth) p.z -= fieldDepth * 2f;
             if (p.z < -fieldDepth) p.z += fieldDepth * 2f;
             if (p.x > fieldRadius) p.x -= fieldRadius * 2f;

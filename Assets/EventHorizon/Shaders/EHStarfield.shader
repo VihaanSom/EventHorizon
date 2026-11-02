@@ -77,11 +77,22 @@ Shader "EventHorizon/Starfield"
 
                 // --- Gravitational Shear (Einstein Arc Distortion)
                 // Tangential vector perpendicular to the radial direction to the hole
-                float3 radialWS = normalize(dir - hole * cosA);
-                float3 tangentWS = cross(hole, radialWS);
-                if (dot(tangentWS, tangentWS) < 1e-4) tangentWS = cross(dir, float3(0, 1, 0));
-                tangentWS = normalize(tangentWS);
-                radialWS = normalize(cross(tangentWS, dir));
+                float3 radVec = dir - hole * cosA;
+                float radLenSq = dot(radVec, radVec);
+                float3 radialWS;
+                float3 tangentWS;
+                if (radLenSq > 1e-5)
+                {
+                    radialWS = radVec * rsqrt(radLenSq);
+                    tangentWS = cross(hole, radialWS);
+                    float tanLenSq = dot(tangentWS, tangentWS);
+                    tangentWS = tanLenSq > 1e-5 ? tangentWS * rsqrt(tanLenSq) : cross(dir, float3(0, 1, 0));
+                }
+                else
+                {
+                    tangentWS = abs(dir.y) < 0.99 ? normalize(cross(dir, float3(0, 1, 0))) : float3(1, 0, 0);
+                    radialWS = cross(tangentWS, dir);
+                }
 
                 // Tidal stretching: as ang approaches holeAng, stretch along tangentWS and compress along radialWS
                 float prox = saturate(1.0 - (ang - holeAng) / (holeAng * 2.2 + 1e-4));

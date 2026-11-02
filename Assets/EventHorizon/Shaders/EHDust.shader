@@ -1,18 +1,17 @@
-// EHDust — High-Fidelity Instanced Cosmic Dust Motes & Relativistic Plunge Streaks.
-// Simulates micro-crystalline dust glimmer and high-velocity relativistic ionization wakes.
-// Optimized for Meta Quest 3 VR (GPU instancing, single pass instanced stereo).
+// EHDust — High-Fidelity Cosmic Dust Motes & Relativistic Plunge Needles.
+// Optimized for Meta Quest 3 VR: Crisp micro-glints with distance-fade and zero camera clipping.
 Shader "EventHorizon/Dust"
 {
     Properties
     {
-        _EH_DustAlpha ("Alpha", Range(0, 1)) = 0.45
-        _EH_DustTint ("Tint", Color) = (0.7, 0.82, 1.0, 1)
+        _EH_DustAlpha ("Alpha", Range(0, 1)) = 0.5
+        _EH_DustTint ("Tint", Color) = (0.75, 0.88, 1.0, 1)
         _EH_StreakStretch ("Streak Stretch", Float) = 1.0
     }
     SubShader
     {
         Tags { "RenderType" = "Transparent" "Queue" = "Transparent+10" }
-        Blend One OneMinusSrcAlpha // Premultiplied alpha for brilliant high-energy sparks
+        Blend One OneMinusSrcAlpha // Premultiplied alpha for intense, clean HDR sparks
         ZWrite Off
         ZTest LEqual
         Cull Off
@@ -40,6 +39,7 @@ Shader "EventHorizon/Dust"
             {
                 float4 positionCS : SV_POSITION;
                 float2 uv : TEXCOORD0;
+                float camDist : TEXCOORD1;
                 UNITY_VERTEX_INPUT_INSTANCE_ID
                 UNITY_VERTEX_OUTPUT_STEREO
             };
@@ -50,6 +50,9 @@ Shader "EventHorizon/Dust"
                 UNITY_SETUP_INSTANCE_ID(v);
                 UNITY_TRANSFER_INSTANCE_ID(v, o);
                 UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(o);
+
+                float3 worldPos = mul(unity_ObjectToWorld, float4(v.positionOS, 1.0)).xyz;
+                o.camDist = distance(worldPos, GetCameraPositionWS());
                 o.positionCS = TransformObjectToHClip(v.positionOS);
                 o.uv = v.uv;
                 return o;
@@ -60,42 +63,42 @@ Shader "EventHorizon/Dust"
                 UNITY_SETUP_INSTANCE_ID(i);
                 UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(i);
 
+                // Near-plane fade: smoothly fade out particles closer than 3.5m so they never blob in VR
+                float nearFade = smoothstep(2.0, 4.5, i.camDist);
+                if (nearFade < 0.005) discard;
+
                 if (_EH_StreakStretch > 1.2)
                 {
-                    // Relativistic high-velocity plunge streak (ionized comet needle)
+                    // Relativistic ionization needle: razor-thin, aerodynamic optical streamline
                     float2 centered = i.uv - float2(0.5, 0.5);
                     float xDist = abs(centered.x) * 2.0;
-
-                    // Y: 0.0 is trail tail, 1.0 is leading ionization head
                     float yPos = saturate(i.uv.y);
 
-                    // Tapering width: razor-sharp head, expanding slightly into wake
-                    float widthFalloff = exp(-xDist * xDist * (10.0 + yPos * 18.0));
+                    // Exponential needle profile: ultra-sharp cross-section
+                    float widthFalloff = exp(-xDist * xDist * 32.0);
+                    // Glowing tail wake
+                    float trail = pow(yPos, 2.5);
+                    // Head spark
+                    float headSpark = exp(-distance(i.uv, float2(0.5, 0.96)) * 28.0) * 3.0;
 
-                    // Trail intensity: brightest at head, decaying smoothly down the wake
-                    float trail = pow(yPos, 2.0);
+                    // Cherenkov blueshift at relativistic velocities
+                    float speedFrac = saturate((_EH_StreakStretch - 1.2) / 4.0);
+                    float3 streakCol = lerp(_EH_DustTint, float3(0.65, 0.90, 1.45), speedFrac);
 
-                    // Incandescent head spark
-                    float headSpark = exp(-distance(i.uv, float2(0.5, 0.94)) * 18.0) * 2.5;
-
-                    // Relativistic Cherenkov blueshift at extreme speeds
-                    float speedFrac = saturate((_EH_StreakStretch - 1.2) / 5.5);
-                    float3 streakCol = lerp(_EH_DustTint, float3(0.55, 0.88, 1.35), speedFrac);
-
-                    float alpha = saturate((trail * widthFalloff + headSpark) * _EH_DustAlpha);
-                    float3 emission = streakCol * (1.2 + headSpark * 2.0) * alpha;
+                    float alpha = saturate((trail * widthFalloff + headSpark) * _EH_DustAlpha * nearFade);
+                    float3 emission = streakCol * (1.5 + headSpark * 2.5) * alpha;
 
                     return half4(emission, alpha);
                 }
                 else
                 {
-                    // Crystalline ambient dust mote: sharp glint core + soft diffraction glow
+                    // Crystalline cosmic dust mote: pinpoint Airy core + subtle twinkle
                     float d = length(i.uv - 0.5) * 2.0;
-                    float core = exp(-d * d * 12.0);
-                    float glow = exp(-d * 2.6) * 0.35;
-                    float alpha = saturate((core + glow) * _EH_DustAlpha);
+                    float core = exp(-d * d * 32.0);
+                    float glow = exp(-d * 4.5) * 0.25;
+                    float alpha = saturate((core + glow) * _EH_DustAlpha * nearFade);
 
-                    float3 emission = _EH_DustTint * (core * 1.5 + glow) * alpha;
+                    float3 emission = _EH_DustTint * (core * 2.2 + glow) * alpha;
                     return half4(emission, alpha);
                 }
             }

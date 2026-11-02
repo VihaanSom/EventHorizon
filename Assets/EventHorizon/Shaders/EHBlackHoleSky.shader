@@ -1,22 +1,24 @@
-// EHBlackHoleSky — High-Fidelity Deep-Space Cosmic Backdrop + Schwarzschild Lensing + Relativistic Photon Rings.
-// Optimized for Meta Quest 3 VR (Single-Pass Instanced, zero compute, zero blits, high fillrate efficiency).
+// EHBlackHoleSky — High-Fidelity Celestial Sky + Relativistic Schwarzschild Lensing + NASA Starfield.
+// Optimized for Meta Quest 3 VR (Single-Pass Instanced, URP compatible, zero compute).
 Shader "EventHorizon/BlackHoleSky"
 {
     Properties
     {
-        _EH_HoleRadius ("Hole Angular Radius (relative)", Float) = 1.0
-        _EH_LensingStrength ("Lensing Strength", Float) = 0.5
-        _EH_LensingRadius ("Lensing Field Radius (deg)", Float) = 28.0
-        _EH_RimSoftness ("Rim Softness", Range(0, 1)) = 0.35
-        _EH_PhotonRing ("Photon Ring Intensity", Range(0, 5)) = 1.8
-        _EH_InteriorBlack ("Interior Blackness", Range(0, 1)) = 0.99
-        _EH_BackgroundTint ("Background Tint", Color) = (0.015, 0.02, 0.04, 1)
+        _EH_SkyMap ("NASA Starfield Map (Equirectangular)", 2D) = "black" {}
+        _EH_SkyExposure ("Sky Exposure", Float) = 1.4
+        _EH_HoleRadius ("Hole Angular Radius", Float) = 1.0
+        _EH_LensingStrength ("Lensing Strength", Float) = 0.65
+        _EH_LensingRadius ("Lensing Field Radius (deg)", Float) = 35.0
+        _EH_RimSoftness ("Rim Softness", Range(0, 1)) = 0.25
+        _EH_PhotonRing ("Photon Ring Intensity", Range(0, 5)) = 2.2
+        _EH_InteriorBlack ("Interior Blackness", Range(0, 1)) = 1.0
+        _EH_BackgroundTint ("Deep Space Tint", Color) = (0.002, 0.003, 0.008, 1)
     }
     SubShader
     {
         Tags { "RenderType" = "Opaque" "Queue" = "Background" }
         ZWrite On
-        Cull Front // inverted dome: camera is inside looking at inner faces
+        Cull Front // inverted dome: camera is inside looking out
 
         Pass
         {
@@ -25,6 +27,10 @@ Shader "EventHorizon/BlackHoleSky"
             #pragma fragment Frag
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
 
+            TEXTURE2D(_EH_SkyMap);
+            SAMPLER(sampler_EH_SkyMap);
+
+            float _EH_SkyExposure;
             float _EH_HoleRadius;
             float _EH_LensingStrength;
             float _EH_LensingRadius;
@@ -53,57 +59,16 @@ Shader "EventHorizon/BlackHoleSky"
                 UNITY_SETUP_INSTANCE_ID(input);
                 UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(o);
 
-                float3 world = mul(unity_ObjectToWorld, float4(input.positionOS, 1.0)).xyz;
-                o.dirWS = world - GetCameraPositionWS();
+                // Celestial world direction at optical infinity (immune to translation jitter)
+                o.dirWS = TransformObjectToWorldDir(input.positionOS);
                 o.positionCS = TransformObjectToHClip(input.positionOS);
                 return o;
             }
 
-            // High-speed 3D pseudo-random hash
-            float EHHash(float3 p)
-            {
-                p = frac(p * 0.3183099 + float3(0.1, 0.2, 0.3));
-                p *= 17.0;
-                return frac(p.x * p.y * p.z * (p.x + p.y + p.z));
-            }
-
-            // Smooth 3D value noise
-            float EHNoise(float3 p)
-            {
-                float3 i = floor(p);
-                float3 f = frac(p);
-                f = f * f * (3.0 - 2.0 * f);
-                float n000 = EHHash(i);
-                float n100 = EHHash(i + float3(1, 0, 0));
-                float n010 = EHHash(i + float3(0, 1, 0));
-                float n110 = EHHash(i + float3(1, 1, 0));
-                float n001 = EHHash(i + float3(0, 0, 1));
-                float n101 = EHHash(i + float3(1, 0, 1));
-                float n011 = EHHash(i + float3(0, 1, 1));
-                float n111 = EHHash(i + float3(1, 1, 1));
-                return lerp(lerp(lerp(n000, n100, f.x), lerp(n010, n110, f.x), f.y),
-                            lerp(lerp(n001, n101, f.x), lerp(n011, n111, f.x), f.y), f.z);
-            }
-
-            // 4-octave Fractional Brownian Motion for celestial nebulae
-            float EHFbm(float3 p)
-            {
-                float v = 0.0;
-                float a = 0.5;
-                float3 shift = float3(1.23, 2.34, 3.45);
-                for (int k = 0; k < 4; ++k)
-                {
-                    v += a * EHNoise(p);
-                    p = p * 2.08 + shift;
-                    a *= 0.5;
-                }
-                return v;
-            }
-
-            // Screen-space dither to suppress VR color banding on Quest 3 LCD panels
+            // Screen-space dither to suppress VR color banding
             float EHDither(float2 screenPos)
             {
-                return frac(sin(dot(screenPos, float2(12.9898, 78.233))) * 43758.5453) * 0.0039;
+                return frac(sin(dot(screenPos, float2(12.9898, 78.233))) * 43758.5453) * 0.0025;
             }
 
             half4 Frag(Varyings input) : SV_Target
@@ -115,77 +80,58 @@ Shader "EventHorizon/BlackHoleSky"
 
                 // Reference angular radius mapped to radians
                 float holeAng = radians(9.0) * _EH_HoleRadius;
-                float cosLensing = cos(radians(_EH_LensingRadius));
+                float cosLensing = cos(radians(_EH_LensingRadius * max(1.0, _EH_HoleRadius * 0.5)));
 
                 float cosA = dot(dir, hole);
                 float ang = acos(clamp(cosA, -1.0, 1.0));
 
-                // --- Relativistic Gravitational Deflection
-                // Schwarzschild bending increases asymptotically toward the photon sphere
-                float u = max(0.0005, (ang - holeAng) / (holeAng + 1e-4));
-                float grBend = _EH_LensingStrength * (0.24 / (u + 0.035) + 0.18 / (ang + 0.12));
-                grBend = min(grBend, 1.85) * smoothstep(cosLensing, 1.0, cosA);
+                // --- General Relativistic Deflection (Null Geodesic bending)
+                // Deflection approaches infinity as light ray touches the photon orbit
+                float u = max(0.0008, (ang - holeAng) / (holeAng + 1e-4));
+                float grBend = _EH_LensingStrength * (0.32 / (u + 0.03) + 0.20 / (ang + 0.15));
+                grBend = min(grBend, 2.2) * smoothstep(cosLensing, 1.0, cosA);
 
-                // Bent ray in celestial frame (deflected away from the hole direction)
-                float3 bent = normalize(dir - hole * (grBend * 0.42));
+                // Bent ray in celestial frame (curving outward from hole)
+                float3 bent = normalize(dir - hole * (grBend * 0.48));
 
-                // --- High-Fidelity Cosmic Background
-                // Galactic plane band in bent space
-                float galacticCoord = bent.y * 0.88 + bent.x * 0.35 + bent.z * 0.12;
-                float galacticPlane = exp(-pow(abs(galacticCoord) * 3.4, 2.0));
-                float galacticHalo = exp(-pow(abs(galacticCoord) * 1.5, 2.0));
+                // --- Sample High-Resolution Real NASA Celestial Star Map
+                // Plate carrée equirectangular spherical mapping
+                float2 skyUV;
+                skyUV.x = frac(atan2(bent.z, bent.x) * (0.5 / 3.1415926535) + 0.5);
+                skyUV.y = acos(clamp(bent.y, -1.0, 1.0)) / 3.1415926535;
 
-                // Multi-scale celestial nebula structure
-                float nebCore = EHFbm(bent * 2.8);
-                float nebFine = EHFbm(bent * 6.2 + float3(2.1, 4.3, 1.5));
-                float nebLanes = EHFbm(bent * 12.5 + float3(7.4, 1.2, 5.8));
+                float3 starColor = SAMPLE_TEXTURE2D(_EH_SkyMap, sampler_EH_SkyMap, skyUV).rgb;
+                
+                // Enhance stellar contrast: keep deep cosmic void dark, boost bright stars and Milky Way core
+                float starLum = dot(starColor, float3(0.299, 0.587, 0.114));
+                float3 enhancedStars = starColor * (1.0 + pow(starLum, 1.8) * 2.5) * _EH_SkyExposure;
+                float3 col = _EH_BackgroundTint + enhancedStars;
 
-                // Interstellar dust absorption rifts (dark lanes carving through bright nebulae)
-                float darkRifts = smoothstep(0.35, 0.72, nebLanes);
+                // --- Einstein-Arc Gravitational Flux Magnification
+                // Stars grazing the event horizon get boosted in surface brightness
+                float arc = exp(-pow((ang - holeAng * 1.25) / (holeAng * 0.24 + 1e-4), 2.0));
+                col += float3(0.65, 0.78, 1.15) * arc * 0.65 * (0.4 + _EH_LensingStrength);
 
-                // Cosmic Palette: Deep space void + H-alpha (magenta) + O-III (cyan) + Stellar Gold
-                float3 voidCol = _EH_BackgroundTint;
-                float3 hAlpha = float3(0.65, 0.14, 0.38) * 0.85;  // Hydrogen-Alpha magenta emission
-                float3 oIII = float3(0.08, 0.48, 0.62) * 0.75;    // Oxygen-III cyan-teal veil
-                float3 stellarGold = float3(0.85, 0.68, 0.38);    // Dense galactic core stars
+                // --- Relativistic Photon Ring (n=1 and n=2 unstable photon orbits)
+                // Intense, razor-sharp ring of trapped light at ~1.03 to 1.08 of shadow radius
+                float r1 = holeAng * (1.0 + 0.025 + _EH_RimSoftness * 0.02);
+                float w1 = holeAng * 0.009 + 1e-4;
+                float ring1Core = exp(-pow((ang - r1) / w1, 2.0));
+                float ring1Halo = exp(-abs(ang - r1) / (w1 * 3.5));
 
-                // Blend celestial layers
-                float3 nebulaCol = lerp(hAlpha, oIII, saturate(nebFine * 1.3 - 0.2));
-                nebulaCol = lerp(nebulaCol, stellarGold, galacticPlane * 0.65);
-                nebulaCol *= (0.4 + 1.2 * nebCore) * (1.1 - 0.7 * darkRifts);
-
-                float3 col = voidCol * (0.6 + 0.5 * nebCore)
-                           + nebulaCol * (galacticPlane * 0.8 + galacticHalo * 0.35);
-
-                // Distant star clouds (dense micro-star haze)
-                float microStars = pow(EHNoise(bent * 36.0), 12.0) * 18.0 * galacticPlane;
-                col += float3(0.9, 0.95, 1.1) * microStars;
-
-                // --- Relativistic Photon Rings (Lyapunov orbits: n=1 and n=2)
-                // Primary photon ring (n=1 orbit): razor-sharp, intense, with relativistic blueshift core
-                float r1 = holeAng * (1.0 + 0.028 + _EH_RimSoftness * 0.03);
-                float w1 = holeAng * 0.012 + 1e-4;
-                float ring1 = exp(-pow((ang - r1) / w1, 2.0));
-                float ring1Core = exp(-abs(ang - r1) / (w1 * 0.45));
-
-                // Secondary photon ring (n=2 orbit): delicate inner sub-ring
-                float r2 = holeAng * (1.0 + 0.009 + _EH_RimSoftness * 0.01);
-                float w2 = holeAng * 0.005 + 1e-4;
+                float r2 = holeAng * (1.0 + 0.008);
+                float w2 = holeAng * 0.004 + 1e-4;
                 float ring2 = exp(-pow((ang - r2) / w2, 2.0));
 
-                // High-energy photon ring emission (HDR intensity for bloom)
-                float3 ring1Col = float3(0.82, 0.92, 1.15) * ring1Core * 2.2 + float3(1.1, 0.9, 0.7) * ring1;
-                float3 ring2Col = float3(0.75, 0.85, 1.2) * ring2 * 0.85;
+                // Ultra-hot thermal emission (HDR values to trigger post-processing Bloom)
+                float3 ring1Col = float3(1.2, 1.4, 2.5) * ring1Core * 3.8 + float3(1.9, 1.4, 0.8) * ring1Halo * 1.2;
+                float3 ring2Col = float3(0.9, 1.2, 1.8) * ring2 * 1.5;
                 col += (ring1Col + ring2Col) * _EH_PhotonRing;
 
-                // --- Einstein-Arc Caustic Glow (gravitational flux magnification near shadow)
-                float arc = exp(-pow((ang - holeAng * 1.32) / (holeAng * 0.28 + 1e-4), 2.0));
-                col += float3(0.5, 0.65, 0.95) * arc * 0.45 * (0.35 + _EH_LensingStrength);
-
-                // --- Event Horizon Silhouette (absolute black singularity with sub-pixel edge)
+                // --- Event Horizon Silhouette (Absolute Physical Black Hole)
                 float rimCut = holeAng * (1.0 - _EH_RimSoftness * 0.015);
-                float rim = smoothstep(rimCut - 0.002, holeAng + 0.003, ang);
-                float3 interior = (1.0 - _EH_InteriorBlack) * float3(0.01, 0.015, 0.025);
+                float rim = smoothstep(rimCut - 0.003, holeAng + 0.003, ang);
+                float3 interior = (1.0 - _EH_InteriorBlack) * float3(0.002, 0.003, 0.005);
                 col = lerp(interior, col, rim);
 
                 // Anti-banding dither for VR display panels

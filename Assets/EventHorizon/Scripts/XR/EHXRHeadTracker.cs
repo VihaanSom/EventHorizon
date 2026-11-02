@@ -1,23 +1,19 @@
 using UnityEngine;
-using System.Collections.Generic;
-
 #if ENABLE_INPUT_SYSTEM
-using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.XR;
 #endif
 
 namespace EventHorizon.XR
 {
     /// <summary>
-    /// Ensures 6DOF / 3DOF head tracking on Meta Quest and PC VR headsets.
-    /// Uses Input System TrackedPoseDriver with seamless XR subsystem fallback.
+    /// Ensures smooth, rock-solid 6DOF head tracking on Meta Quest and PC VR.
+    /// Uses OpenXR native late-latching and TrackedPoseDriver. Strictly avoids
+    /// manual polling overrides in Update() which cause dual-writer camera shake.
     /// </summary>
     [AddComponentMenu("EventHorizon/XR/XR Head Tracker")]
     [RequireComponent(typeof(Camera))]
     public class EHXRHeadTracker : MonoBehaviour
     {
-        UnityEngine.XR.InputDevice centerEyeDevice;
-
         void Awake()
         {
 #if ENABLE_INPUT_SYSTEM
@@ -26,65 +22,22 @@ namespace EventHorizon.XR
             {
                 driver = gameObject.AddComponent<TrackedPoseDriver>();
                 driver.trackingType = TrackedPoseDriver.TrackingType.RotationAndPosition;
+                driver.updateType = TrackedPoseDriver.UpdateType.UpdateAndBeforeRender;
             }
 #endif
         }
 
-        void OnEnable()
-        {
-            UnityEngine.XR.InputDevices.deviceConnected += OnDeviceConnected;
-            FindCenterEye();
-        }
-
-        void OnDisable()
-        {
-            UnityEngine.XR.InputDevices.deviceConnected -= OnDeviceConnected;
-        }
-
-        void OnDeviceConnected(UnityEngine.XR.InputDevice dev)
-        {
-            if ((dev.characteristics & UnityEngine.XR.InputDeviceCharacteristics.HeadMounted) != 0)
-            {
-                centerEyeDevice = dev;
-            }
-        }
-
-        void FindCenterEye()
-        {
-            var devices = new List<UnityEngine.XR.InputDevice>();
-            UnityEngine.XR.InputDevices.GetDevicesWithCharacteristics(
-                UnityEngine.XR.InputDeviceCharacteristics.HeadMounted | UnityEngine.XR.InputDeviceCharacteristics.EyeTracking, devices);
-            if (devices.Count == 0)
-                UnityEngine.XR.InputDevices.GetDevicesWithCharacteristics(UnityEngine.XR.InputDeviceCharacteristics.HeadMounted, devices);
-
-            if (devices.Count > 0)
-                centerEyeDevice = devices[0];
-            else
-                centerEyeDevice = UnityEngine.XR.InputDevices.GetDeviceAtXRNode(UnityEngine.XR.XRNode.CenterEye);
-        }
-
+#if UNITY_EDITOR
+        // Desktop mouse look fallback for rapid PC testing when no VR headset is worn
         void Update()
         {
-            if (!centerEyeDevice.isValid)
+            if (!UnityEngine.XR.XRSettings.enabled && Input.GetMouseButton(1))
             {
-                FindCenterEye();
-            }
-
-            if (centerEyeDevice.isValid)
-            {
-                if (centerEyeDevice.TryGetFeatureValue(UnityEngine.XR.CommonUsages.centerEyeRotation, out Quaternion rot) ||
-                    centerEyeDevice.TryGetFeatureValue(UnityEngine.XR.CommonUsages.deviceRotation, out rot))
-                {
-                    if (rot != Quaternion.identity)
-                        transform.localRotation = rot;
-                }
-
-                if (centerEyeDevice.TryGetFeatureValue(UnityEngine.XR.CommonUsages.centerEyePosition, out Vector3 pos) ||
-                    centerEyeDevice.TryGetFeatureValue(UnityEngine.XR.CommonUsages.devicePosition, out pos))
-                {
-                    transform.localPosition = pos;
-                }
+                float mx = Input.GetAxis("Mouse X") * 2.5f;
+                float my = -Input.GetAxis("Mouse Y") * 2.5f;
+                transform.localEulerAngles += new Vector3(my, mx, 0f);
             }
         }
+#endif
     }
 }
