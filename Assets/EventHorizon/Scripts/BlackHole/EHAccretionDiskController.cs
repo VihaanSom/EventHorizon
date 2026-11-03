@@ -61,7 +61,9 @@ namespace EventHorizon.BlackHole
 
         void ApplyStaticTilt()
         {
-            transform.localRotation = Quaternion.Euler(tiltDegrees, 0f, 0f);
+            // Pitch disk forward (-X) so the front slopes down toward the player
+            // and the halo arch rises up behind the black hole into the authentic three-quarters view
+            transform.localRotation = Quaternion.Euler(-Mathf.Abs(tiltDegrees), 0f, 0f);
         }
 
         /// <summary>Called only by the director.</summary>

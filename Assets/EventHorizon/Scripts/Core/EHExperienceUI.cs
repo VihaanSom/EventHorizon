@@ -67,8 +67,10 @@ namespace EventHorizon
             fadeImage.rectTransform.offsetMin = new Vector2(-500f, -500f);
             fadeImage.rectTransform.offsetMax = new Vector2(500f, 500f);
             fadeImage.color = new Color(0f, 0f, 0f, 0f);
+            fadeGo.SetActive(false);
 
             centerText = MakeText(root.transform, "Center", 28);
+            centerText.gameObject.SetActive(false);
             endText = MakeText(root.transform, "EndCard", 20);
             endText.gameObject.SetActive(false);
         }
@@ -101,11 +103,8 @@ namespace EventHorizon
 
         public void ShowStartPrompt()
         {
-            if (centerText != null)
-            {
-                centerText.gameObject.SetActive(true);
-                centerText.text = "EVENT HORIZON\n\nLook around freely.\n\nPress any Trigger / Button to begin the descent";
-            }
+            // Suppressed to ensure clean, uninterrupted cinematic VR immersion without white UI card artifacts
+            if (centerText != null) centerText.gameObject.SetActive(false);
         }
 
         public void HideStartPrompt()
@@ -115,11 +114,8 @@ namespace EventHorizon
 
         public void ShowPaused()
         {
-            if (centerText != null)
-            {
-                centerText.gameObject.SetActive(true);
-                centerText.text = "PAUSED\n\nPress again to resume";
-            }
+            // Suppressed to avoid obstructing the user's field of view in VR
+            if (centerText != null) centerText.gameObject.SetActive(false);
         }
 
         public void HidePaused() => HideStartPrompt();

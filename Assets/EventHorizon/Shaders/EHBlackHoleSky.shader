@@ -112,19 +112,12 @@ Shader "EventHorizon/BlackHoleSky"
                 float3 celestialStars = pow(max(0.0, nasaStars), 0.88) * _EH_SkyExposure;
                 float3 col = _EH_BackgroundTint + celestialStars;
 
-                // --- 2. Gravitational Caustic Lensing Flux near Einstein Ring
+                // --- 2. Gravitational Caustic Lensing Flux near Einstein Ring (Warm golden-amber / orange)
                 float einsteinAng = holeAng * 1.35;
                 float arc = exp(-pow((ang - einsteinAng) / (holeAng * 0.25 + 1e-4), 2.0));
-                col += float3(0.55, 0.70, 1.05) * arc * 0.45 * max(0.2, _EH_LensingStrength);
+                col += float3(1.25, 0.82, 0.35) * arc * 0.40 * max(0.2, _EH_LensingStrength);
 
-                // --- 3. Relativistic Photon Ring (Razor-thin, luminous golden halo at 1.025 * holeAng)
-                float r1 = holeAng * 1.025;
-                float w1 = holeAng * 0.007 + 1e-4;
-                float ring1 = exp(-pow((ang - r1) / w1, 2.0));
-                float3 ringCol = float3(1.35, 1.15, 0.85) * ring1 * 1.6 * _EH_PhotonRing;
-                col += ringCol;
-
-                // --- 4. Event Horizon Silhouette (Absolute Physical Black Hole)
+                // --- 3. Event Horizon Silhouette (Absolute Physical Black Hole)
                 float rimCut = holeAng * (1.0 - _EH_RimSoftness * 0.015);
                 float rim = smoothstep(rimCut - 0.001, holeAng + 0.001, ang);
                 col = lerp(float3(0, 0, 0), col, rim);
