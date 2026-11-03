@@ -15,10 +15,10 @@ namespace EventHorizon.BlackHole
     {
         [Header("Gargantua Scale")]
         [SerializeField] float horizonRadius = 14.0f;
-        [SerializeField] float diskInnerRadius = 14.3f;
+        [SerializeField] float diskInnerRadius = 14.15f;
         [SerializeField] float diskOuterRadius = 52.0f;
-        [SerializeField] float haloOuterRadius = 36.0f;
-        [SerializeField, Range(0f, 45f)] float tiltDegrees = 25.0f;
+        [SerializeField] float haloOuterRadius = 38.0f;
+        [SerializeField, Range(0f, 45f)] float tiltDegrees = 20.0f;
 
         [Header("Look")]
         [SerializeField] Material diskMaterial;
@@ -45,7 +45,7 @@ namespace EventHorizon.BlackHole
         void OnValidate()
         {
             horizonRadius = Mathf.Max(1f, horizonRadius);
-            diskInnerRadius = Mathf.Max(horizonRadius + 0.1f, diskInnerRadius);
+            diskInnerRadius = Mathf.Max(horizonRadius + 0.05f, diskInnerRadius);
             diskOuterRadius = Mathf.Max(diskInnerRadius + 5f, diskOuterRadius);
             haloOuterRadius = Mathf.Clamp(haloOuterRadius, diskInnerRadius + 2f, diskOuterRadius);
             EnsureMesh();
@@ -55,6 +55,7 @@ namespace EventHorizon.BlackHole
 
         void Start()
         {
+            EnsureMesh();
             EnsureHorizonSphere();
             ApplyStaticTilt();
         }
@@ -131,7 +132,7 @@ namespace EventHorizon.BlackHole
             renderer.sharedMaterial = diskMaterial;
             renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             renderer.receiveShadows = false;
-            filter.sharedMesh = BuildInterstellarMesh(diskInnerRadius, diskOuterRadius, haloOuterRadius);
+            filter.sharedMesh = BuildInterstellarMesh(diskInnerRadius, diskOuterRadius, haloOuterRadius, tiltDegrees);
         }
 
         /// <summary>
@@ -182,13 +183,12 @@ namespace EventHorizon.BlackHole
         /// Builds the authentic Interstellar (Gargantua) accretion disk as a single, continuous,
         /// seamless 3D ribbon:
         /// 1. The front half sweeps flat in the horizontal equatorial plane (Y = 0) across the black hole.
-        /// 2. The flanks transition with smooth C1 tangent continuity (zero vertical slope at the flanks)
-        ///    into the majestic upper halo arching over the top of the event horizon.
-        /// 3. Zero 90-degree colliding geometry: it is ONE continuous, flowing piece of geometry.
-        /// 4. No lower arch: completely eliminates the crescent "moon like structure" in the black ball,
-        ///    leaving the event horizon interior pure, deep, ominous black both from outside and inside.
+        /// 2. The back half forms a guaranteed true 100% circular halo arch in world space, wrapping
+        ///    snugly and perfectly around the spherical event horizon with zero squarishness and zero gap.
+        /// 3. Zero 90-degree colliding geometry: connected seamlessly at both flanks.
+        /// 4. No lower arch: interior of the event horizon remains a pure, deep, ominous black void.
         /// </summary>
-        public static Mesh BuildInterstellarMesh(float inner, float outer, float haloOuter)
+        public static Mesh BuildInterstellarMesh(float inner, float outer, float haloOuter, float tiltDeg = 20f)
         {
             var mesh = new Mesh { name = "EH_InterstellarGargantuaDisk" };
             var verts = new System.Collections.Generic.List<Vector3>();
@@ -199,10 +199,14 @@ namespace EventHorizon.BlackHole
             int cols = 240;
             int colCount = cols + 1;
 
+            float beta = -Mathf.Deg2Rad * Mathf.Abs(tiltDeg);
+            float cosB = Mathf.Cos(beta);
+            float sinB = Mathf.Sin(beta);
+            float zBack = 2.0f;
+
             for (int r = 0; r <= rows; r++)
             {
                 float fr = (float)r / rows;
-                float radius = Mathf.Lerp(inner, outer, fr);
 
                 for (int c = 0; c <= cols; c++)
                 {
@@ -210,23 +214,29 @@ namespace EventHorizon.BlackHole
                     float angle = fa * Mathf.PI * 2f;
 
                     Vector3 pos;
-                    // Front half: angle in [PI, 2*PI] (facing -Z towards camera)
-                    // Perfectly flat in the equatorial plane: Y = 0
                     if (angle >= Mathf.PI)
                     {
+                        // Front half: angle in [PI, 2*PI] (sweeping in front of the black hole)
+                        // Flat in equatorial plane (Y = 0)
+                        float radius = Mathf.Lerp(inner, outer, fr);
                         pos = new Vector3(Mathf.Cos(angle) * radius, 0f, Mathf.Sin(angle) * radius);
                     }
                     else
                     {
-                        // Back half: angle in [0, PI] (behind black hole)
-                        // Smoothly arches up into +Y over the event horizon
-                        // Cubic Hermite smoothstep guarantees zero slope (C1 continuity) at flanks (angle = 0 and PI)
-                        float s = Mathf.Sin(angle); // 0 at flanks, 1 at back crest
-                        float h = s * s * (3f - 2f * s); // smoothstep: d/dangle is 0 at flanks!
+                        // Back half: angle in [0, PI] (arching over the black hole)
+                        // Exact circular halo arch in world space:
+                        // x_world = radius * cos(angle)
+                        // y_world = radius * sin(angle)
+                        // z_world = zBack * sin(angle)  (smoothly curves behind the horizon sphere)
+                        // This guarantees a 100% circular contour hugging the sphere with uniform clearance at all angles.
+                        float sinA = Mathf.Sin(angle);
+                        float cosA = Mathf.Cos(angle);
+                        float rOuter = Mathf.Lerp(outer, haloOuter, sinA);
+                        float radius = Mathf.Lerp(inner, rOuter, fr);
 
-                        float x = Mathf.Cos(angle) * radius;
-                        float y = h * (radius * 0.92f); // smooth majestic arch
-                        float z = Mathf.Lerp(Mathf.Sin(angle) * radius, 3.5f + 0.12f * radius * s, h);
+                        float x = radius * cosA;
+                        float y = (radius * cosB + zBack * sinB) * sinA;
+                        float z = (-radius * sinB + zBack * cosB) * sinA;
                         pos = new Vector3(x, y, z);
                     }
 

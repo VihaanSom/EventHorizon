@@ -440,9 +440,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   horizonRadius: 14
-  diskInnerRadius: 14.3
+  diskInnerRadius: 14.15
   diskOuterRadius: 52
-  haloOuterRadius: 36
+  haloOuterRadius: 38
   tiltDegrees: 18
   diskMaterial: {fileID: 2100000, guid: e0000000000000000000000000000033, type: 2}
   emissionGain: 1
