@@ -20,7 +20,7 @@ namespace EventHorizon.BlackHole
         static readonly int StrengthId = Shader.PropertyToID("_EH_LensingStrength");
         static readonly int RadiusId = Shader.PropertyToID("_EH_LensingRadius");
 
-        float currentStrength;
+        float currentStrength = 1.0f;
 
         public bool LensingEnabled
         {

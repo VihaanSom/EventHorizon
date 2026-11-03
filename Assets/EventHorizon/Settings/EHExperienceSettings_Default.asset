@@ -15,7 +15,7 @@ MonoBehaviour:
   phases:
   - durationSeconds: 45
     blackHoleScale: 1
-    lensingStrength: 0.35
+    lensingStrength: 1
     diskEmission: 0.55
     starBrightness: 1
     dustDensity: 0.25
@@ -24,7 +24,7 @@ MonoBehaviour:
     audioIntensity: 0.2
   - durationSeconds: 75
     blackHoleScale: 1.6
-    lensingStrength: 0.6
+    lensingStrength: 1.25
     diskEmission: 1
     starBrightness: 1
     dustDensity: 0.45
@@ -33,7 +33,7 @@ MonoBehaviour:
     audioIntensity: 0.45
   - durationSeconds: 60
     blackHoleScale: 2.6
-    lensingStrength: 1
+    lensingStrength: 1.5
     diskEmission: 1.25
     starBrightness: 0.9
     dustDensity: 1
@@ -42,7 +42,7 @@ MonoBehaviour:
     audioIntensity: 0.8
   - durationSeconds: 60
     blackHoleScale: 4.2
-    lensingStrength: 1.35
+    lensingStrength: 1.75
     diskEmission: 0.9
     starBrightness: 0.7
     dustDensity: 0.8
@@ -51,7 +51,7 @@ MonoBehaviour:
     audioIntensity: 1
   - durationSeconds: 60
     blackHoleScale: 6.5
-    lensingStrength: 1.7
+    lensingStrength: 2
     diskEmission: 0.45
     starBrightness: 0.4
     dustDensity: 0.5

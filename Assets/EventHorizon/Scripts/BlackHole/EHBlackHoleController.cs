@@ -32,6 +32,7 @@ namespace EventHorizon.BlackHole
 
         static readonly int HoleDirId = Shader.PropertyToID("_EH_HoleDir");
         static readonly int HoleRadiusId = Shader.PropertyToID("_EH_HoleRadius");
+        static readonly int AngularRadiusId = Shader.PropertyToID("_EH_HoleAngularRadius");
         static readonly int RimId = Shader.PropertyToID("_EH_RimSoftness");
         static readonly int RingId = Shader.PropertyToID("_EH_PhotonRing");
         static readonly int BlackId = Shader.PropertyToID("_EH_InteriorBlack");
@@ -154,13 +155,15 @@ namespace EventHorizon.BlackHole
             Vector3 dir = (target - camPos).normalized;
             if (dir.sqrMagnitude < 0.01f) dir = Vector3.forward;
 
-            // Physical apparent angular radius based on true world distance
+            // Physical apparent angular radius based on true world distance and 14m horizon radius
             float dist = Mathf.Max(0.5f, Vector3.Distance(camPos, target));
+            float horizonAngularRadius = Mathf.Asin(Mathf.Clamp01(14.0f / dist));
             float distanceGain = Mathf.Clamp(100f / dist, 0.7f, 8.5f);
             float effectiveScale = scale * distanceGain * 0.50f;
 
             Shader.SetGlobalVector(HoleDirId, dir);
             Shader.SetGlobalFloat(HoleRadiusId, baseAngularRadius * effectiveScale);
+            Shader.SetGlobalFloat(AngularRadiusId, horizonAngularRadius * scale);
             Shader.SetGlobalFloat(RimId, rimSoftness);
             Shader.SetGlobalFloat(RingId, photonRingIntensity);
             Shader.SetGlobalFloat(BlackId, interiorBlackness);
@@ -168,6 +171,7 @@ namespace EventHorizon.BlackHole
             {
                 skyMaterial.SetVector(HoleDirId, dir);
                 skyMaterial.SetFloat(HoleRadiusId, baseAngularRadius * effectiveScale);
+                skyMaterial.SetFloat(AngularRadiusId, horizonAngularRadius * scale);
             }
         }
     }

@@ -27,6 +27,7 @@ Shader "EventHorizon/Starfield"
             float _EH_StarBrightness;
             float _EH_PointScale;
             float _EH_HoleRadius;
+            float _EH_HoleAngularRadius;
             float _EH_LensingStrength;
             float _EH_LensingRadius;
             float3 _EH_HoleDir;
@@ -65,14 +66,20 @@ Shader "EventHorizon/Starfield"
 
                 float cosA = dot(dir, hole);
                 float ang = acos(clamp(cosA, -1.0, 1.0));
-                float holeAng = radians(9.0) * _EH_HoleRadius;
-                float cosLensing = cos(radians(_EH_LensingRadius));
+                float holeAng = _EH_HoleAngularRadius > 0.005 ? _EH_HoleAngularRadius : radians(9.0) * max(0.35, _EH_HoleRadius);
+                float lensingOuter = holeAng * 3.5;
 
-                // Relativistic deflection angle
-                float u = max(0.001, (ang - holeAng) / (holeAng + 1e-4));
-                float bend = _EH_LensingStrength * (0.22 / (u + 0.04) + 0.16 / (ang + 0.12));
-                bend = min(bend, 1.8) * smoothstep(cosLensing, 1.0, cosA);
-                float3 bentDir = normalize(dir - hole * (bend * 0.42));
+                // Relativistic deflection angle around true physical event horizon
+                float bend = 0.0;
+                if (ang > holeAng && ang < lensingOuter)
+                {
+                    float u = (ang - holeAng) / (holeAng + 1e-4);
+                    float deflection = (0.55 / (u + 0.15) + 0.20 / (u * u + 0.40)) * holeAng;
+                    float fade = smoothstep(lensingOuter, holeAng * 1.15, ang);
+                    bend = deflection * max(0.15, _EH_LensingStrength) * fade;
+                }
+
+                float3 bentDir = normalize(dir - hole * bend);
                 float3 bentCentre = _WorldSpaceCameraPos + bentDir * dist;
 
                 // --- Gravitational Shear (Einstein Arc Distortion)
@@ -94,10 +101,10 @@ Shader "EventHorizon/Starfield"
                     radialWS = cross(tangentWS, dir);
                 }
 
-                // Subtle tidal stretching: avoid giant smudges in VR
-                float prox = saturate(1.0 - (ang - holeAng) / (holeAng * 2.2 + 1e-4));
-                float tangStretch = 1.0 + prox * prox * (0.8 * _EH_LensingStrength);
-                float radCompress = max(0.70, 1.0 - prox * 0.30);
+                // Dramatic tidal stretching: as stars graze the event horizon, stretch into tangential Einstein arcs!
+                float prox = saturate(1.0 - (ang - holeAng) / (holeAng * 2.0 + 1e-4));
+                float tangStretch = 1.0 + prox * prox * (2.8 * max(0.15, _EH_LensingStrength));
+                float radCompress = max(0.40, 1.0 - prox * 0.60);
 
                 // Transform to Camera View Space for correct stereoscopic VR orientation
                 float4 viewPos = mul(UNITY_MATRIX_V, float4(bentCentre, 1.0));

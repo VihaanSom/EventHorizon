@@ -113,6 +113,7 @@ namespace EventHorizon.BlackHole
             blackMat.name = "EH_BlackHoleCore_Mat";
             blackMat.color = Color.black;
             if (blackMat.HasProperty("_Surface")) blackMat.SetFloat("_Surface", 0); // Opaque
+            if (blackMat.HasProperty("_Cull")) blackMat.SetInt("_Cull", (int)UnityEngine.Rendering.CullMode.Off); // Double-sided black (no light inside)
             blackMat.renderQueue = 2000; // Geometry queue (writes to depth buffer)
             sphereRenderer.sharedMaterial = blackMat;
             sphereRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
@@ -176,12 +177,14 @@ namespace EventHorizon.BlackHole
         }
 
         /// <summary>
-        /// Builds the authentic Interstellar (Gargantua) accretion disk geometry:
-        /// 1. Equatorial Primary Disk: flat horizontal ring in the XZ plane.
-        /// 2. Upper Lensed Halo Arch: light from the back of the disk bent up over the black hole (Z >= 3.5m, Y >= 0).
-        /// 3. Lower Lensed Halo Arch: light from the back of the disk bent down under the black hole (Z >= 3.5m, Y <= 0).
-        /// Placed behind the central Event Horizon sphere so it naturally occludes the inner region,
-        /// leaving the pure black silhouette of Gargantua with zero perpendicular intersecting geometry.
+        /// Builds the authentic Interstellar (Gargantua) accretion disk as a single, continuous,
+        /// seamless 3D ribbon:
+        /// 1. The front half sweeps flat in the horizontal equatorial plane (Y = 0) across the black hole.
+        /// 2. The flanks transition with smooth C1 tangent continuity (zero vertical slope at the flanks)
+        ///    into the majestic upper halo arching over the top of the event horizon.
+        /// 3. Zero 90-degree colliding geometry: it is ONE continuous, flowing piece of geometry.
+        /// 4. No lower arch: completely eliminates the crescent "moon like structure" in the black ball,
+        ///    leaving the event horizon interior pure, deep, ominous black both from outside and inside.
         /// </summary>
         public static Mesh BuildInterstellarMesh(float inner, float outer, float haloOuter)
         {
@@ -190,69 +193,63 @@ namespace EventHorizon.BlackHole
             var uvs = new System.Collections.Generic.List<Vector2>();
             var indices = new System.Collections.Generic.List<int>();
 
-            void AddAnnulus(System.Func<float, float, Vector3> posEvaluator, int rows, int cols, float uvYOffset, float uvYScale, float uvXOffset, float uvXScale)
+            int rows = 32;
+            int cols = 240;
+            int colCount = cols + 1;
+
+            for (int r = 0; r <= rows; r++)
             {
-                int baseIndex = verts.Count;
-                int colCount = cols + 1;
-                for (int r = 0; r <= rows; r++)
+                float fr = (float)r / rows;
+                float radius = Mathf.Lerp(inner, outer, fr);
+
+                for (int c = 0; c <= cols; c++)
                 {
-                    float fr = (float)r / rows;
-                    for (int c = 0; c <= cols; c++)
+                    float fa = (float)c / cols;
+                    float angle = fa * Mathf.PI * 2f;
+
+                    Vector3 pos;
+                    // Front half: angle in [PI, 2*PI] (facing -Z towards camera)
+                    // Perfectly flat in the equatorial plane: Y = 0
+                    if (angle >= Mathf.PI)
                     {
-                        float fa = (float)c / cols;
-                        Vector3 pos = posEvaluator(fr, fa);
-                        verts.Add(pos);
-                        uvs.Add(new Vector2(uvXOffset + fa * uvXScale, uvYOffset + fr * uvYScale));
+                        pos = new Vector3(Mathf.Cos(angle) * radius, 0f, Mathf.Sin(angle) * radius);
                     }
-                }
-                for (int r = 0; r < rows; r++)
-                {
-                    for (int c = 0; c < cols; c++)
+                    else
                     {
-                        int i0 = baseIndex + r * colCount + c;
-                        int i1 = i0 + 1;
-                        int i2 = i0 + colCount;
-                        int i3 = i2 + 1;
-                        // Double-sided faces
-                        indices.Add(i0); indices.Add(i2); indices.Add(i1);
-                        indices.Add(i1); indices.Add(i2); indices.Add(i3);
-                        indices.Add(i0); indices.Add(i1); indices.Add(i2);
-                        indices.Add(i1); indices.Add(i3); indices.Add(i2);
+                        // Back half: angle in [0, PI] (behind black hole)
+                        // Smoothly arches up into +Y over the event horizon
+                        // Cubic Hermite smoothstep guarantees zero slope (C1 continuity) at flanks (angle = 0 and PI)
+                        float s = Mathf.Sin(angle); // 0 at flanks, 1 at back crest
+                        float h = s * s * (3f - 2f * s); // smoothstep: d/dangle is 0 at flanks!
+
+                        float x = Mathf.Cos(angle) * radius;
+                        float y = h * (radius * 0.92f); // smooth majestic arch
+                        float z = Mathf.Lerp(Mathf.Sin(angle) * radius, 3.5f + 0.12f * radius * s, h);
+                        pos = new Vector3(x, y, z);
                     }
+
+                    verts.Add(pos);
+                    // Continuous UV mapping: u is orbital angle (0..1), v is radius (0..1)
+                    uvs.Add(new Vector2(fa, fr));
                 }
             }
 
-            // 1. Equatorial Primary Disk (XZ plane, 360 degrees)
-            AddAnnulus((fr, fa) =>
+            for (int r = 0; r < rows; r++)
             {
-                float radius = Mathf.Lerp(inner, outer, fr);
-                float angle = fa * Mathf.PI * 2f;
-                return new Vector3(Mathf.Cos(angle) * radius, 0f, Mathf.Sin(angle) * radius);
-            }, 24, 180, 0f, 1f, 0f, 1f);
+                for (int c = 0; c < cols; c++)
+                {
+                    int i0 = r * colCount + c;
+                    int i1 = i0 + 1;
+                    int i2 = i0 + colCount;
+                    int i3 = i2 + 1;
 
-            // 2. Upper Lensed Halo Arch (Top half, seamlessly branching from flanks and curving behind the black hole)
-            AddAnnulus((fr, fa) =>
-            {
-                float radius = Mathf.Lerp(inner, haloOuter, fr);
-                float angle = fa * Mathf.PI; // 0 to PI
-                float s = Mathf.Sin(angle);
-                float x = -Mathf.Cos(angle) * radius;
-                float y = s * radius;
-                float z = s * (3.5f + 0.15f * radius * s);
-                return new Vector3(x, y, z);
-            }, 18, 120, 0f, 1f, 0f, 1f);
-
-            // 3. Lower Lensed Halo Arch (Bottom half, seamlessly branching from flanks and curving behind the black hole)
-            AddAnnulus((fr, fa) =>
-            {
-                float radius = Mathf.Lerp(inner, haloOuter, fr);
-                float angle = Mathf.PI + fa * Mathf.PI; // PI to 2*PI
-                float s = -Mathf.Sin(angle); // positive 0 to 1
-                float x = -Mathf.Cos(angle) * radius;
-                float y = Mathf.Sin(angle) * radius * 0.65f;
-                float z = s * (3.5f + 0.12f * radius * s);
-                return new Vector3(x, y, z);
-            }, 16, 120, 0f, 1f, 0f, 1f);
+                    // Double-sided faces for complete visibility from any camera angle
+                    indices.Add(i0); indices.Add(i2); indices.Add(i1);
+                    indices.Add(i1); indices.Add(i2); indices.Add(i3);
+                    indices.Add(i0); indices.Add(i1); indices.Add(i2);
+                    indices.Add(i1); indices.Add(i3); indices.Add(i2);
+                }
+            }
 
             mesh.SetVertices(verts);
             mesh.SetUVs(0, uvs);

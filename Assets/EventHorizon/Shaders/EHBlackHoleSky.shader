@@ -33,6 +33,7 @@ Shader "EventHorizon/BlackHoleSky"
 
             float _EH_SkyExposure;
             float _EH_HoleRadius;
+            float _EH_HoleAngularRadius;
             float _EH_LensingStrength;
             float _EH_LensingRadius;
             float _EH_RimSoftness;
@@ -79,45 +80,48 @@ Shader "EventHorizon/BlackHoleSky"
                 float3 hole = normalize(_EH_HoleDir);
                 if (dot(hole, hole) < 0.1) hole = float3(0, 0, 1);
 
-                // Reference angular radius mapped to radians
-                float holeAng = radians(9.0) * _EH_HoleRadius;
-                float cosLensing = cos(radians(_EH_LensingRadius * max(1.0, _EH_HoleRadius * 0.5)));
-
+                // True physical angular radius of the 14m event horizon in radians
+                float holeAng = _EH_HoleAngularRadius > 0.005 ? _EH_HoleAngularRadius : radians(9.0) * max(0.35, _EH_HoleRadius);
                 float cosA = dot(dir, hole);
                 float ang = acos(clamp(cosA, -1.0, 1.0));
 
-                // --- Physically Calibrated General Relativistic Deflection
-                // Tightly curves rays grazing the event horizon without distorting or magnifying the broader sky
-                float u = max(0.002, (ang - holeAng) / (holeAng + 1e-4));
-                float grBend = _EH_LensingStrength * (0.06 / (u + 0.08) + 0.03 / (ang + 0.35));
-                grBend = min(grBend, 0.40) * smoothstep(cosLensing, 1.0, cosA);
+                // --- Relativistic Gravitational Lensing Field
+                // Extends outward from the event horizon to 3.5x shadow radius
+                float lensingOuter = holeAng * 3.5;
+                float grBend = 0.0;
 
-                // Bent ray in celestial frame (curving outward from hole)
-                float3 bent = normalize(dir - hole * (grBend * 0.12));
+                if (ang > holeAng && ang < lensingOuter)
+                {
+                    float u = (ang - holeAng) / (holeAng + 1e-4);
+                    // Einstein deflection: strong curvature near photon sphere decaying smoothly outward
+                    float deflection = (0.55 / (u + 0.15) + 0.20 / (u * u + 0.40)) * holeAng;
+                    float fade = smoothstep(lensingOuter, holeAng * 1.15, ang);
+                    grBend = deflection * max(0.15, _EH_LensingStrength) * fade;
+                }
+
+                // Bent ray in celestial frame (curving outward from hole, forming Einstein arcs)
+                float3 bent = normalize(dir - hole * grBend);
 
                 // --- 1. Authentic NASA SVS #4851 8K Equirectangular Deep Space Map
                 float2 skyUV;
                 skyUV.x = frac(atan2(bent.z, bent.x) * (0.5 / 3.1415926535) + 0.5);
                 skyUV.y = acos(clamp(bent.y, -1.0, 1.0)) / 3.1415926535;
 
-                // Sample the 16-bit float linear HDR NASA map directly:
-                // Full unmagnified 8K resolution: pinpoint stars, sharp dust lanes, and zero blur!
+                // Sample the 16-bit float linear HDR NASA map
                 float3 nasaStars = SAMPLE_TEXTURE2D(_EH_SkyMap, sampler_EH_SkyMap, skyUV).rgb;
-
-                // Subtle dynamic range lift for faint magnitude 5-6 stars while preserving deep space void
                 float3 celestialStars = pow(max(0.0, nasaStars), 0.88) * _EH_SkyExposure;
                 float3 col = _EH_BackgroundTint + celestialStars;
 
                 // --- 2. Gravitational Caustic Lensing Flux near Einstein Ring
-                float arc = exp(-pow((ang - holeAng * 1.15) / (holeAng * 0.18 + 1e-4), 2.0));
-                col += float3(0.40, 0.55, 0.85) * arc * 0.35 * (0.25 + _EH_LensingStrength);
+                float einsteinAng = holeAng * 1.35;
+                float arc = exp(-pow((ang - einsteinAng) / (holeAng * 0.25 + 1e-4), 2.0));
+                col += float3(0.55, 0.70, 1.05) * arc * 0.45 * max(0.2, _EH_LensingStrength);
 
-                // --- 3. Relativistic Photon Ring (Thin, delicate, non-fireball!)
-                // Razor-thin photon sphere rim: peak brightness ~1.2 (gentle, cinematic glow)
-                float r1 = holeAng * 1.012;
-                float w1 = holeAng * 0.005 + 1e-4;
+                // --- 3. Relativistic Photon Ring (Razor-thin, luminous golden halo at 1.025 * holeAng)
+                float r1 = holeAng * 1.025;
+                float w1 = holeAng * 0.007 + 1e-4;
                 float ring1 = exp(-pow((ang - r1) / w1, 2.0));
-                float3 ringCol = float3(1.15, 1.0, 0.75) * ring1 * 1.25 * _EH_PhotonRing;
+                float3 ringCol = float3(1.35, 1.15, 0.85) * ring1 * 1.6 * _EH_PhotonRing;
                 col += ringCol;
 
                 // --- 4. Event Horizon Silhouette (Absolute Physical Black Hole)
